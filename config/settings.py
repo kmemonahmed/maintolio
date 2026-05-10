@@ -38,7 +38,7 @@ INSTALLED_APPS = [
     'apps.accounts',
     'apps.assets',
     'apps.clients',
-    'apps.companies',
+    'apps.organizations',
     'apps.notifications',
     'apps.reports',
     'apps.workorders'
@@ -105,7 +105,7 @@ MEDIA_URL = 'media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 # Custom User Model
-AUTH_USER_MODEL = "accounts.CustomUser"
+AUTH_USER_MODEL = "accounts.User"
 
 # REST Framework
 REST_FRAMEWORK = {
@@ -119,8 +119,8 @@ REST_FRAMEWORK = {
 
 # Spectacular
 SPECTACULAR_SETTINGS = {
-    'TITLE': 'OPSTrack API',
-    'DESCRIPTION': 'API for OPSTrack',
+    'TITLE': 'Maintolio API',
+    'DESCRIPTION': 'API for Maintolio',
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
 }

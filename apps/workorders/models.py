@@ -1,4 +1,5 @@
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 
@@ -21,8 +22,8 @@ class WorkOrder(BaseModel):
         CANCELLED = "CANCELLED", "Cancelled"
         OVERDUE = "OVERDUE", "Overdue"
 
-    company = models.ForeignKey(
-        "companies.Company",
+    organization = models.ForeignKey(
+        "organizations.Organization",
         on_delete=models.CASCADE,
         related_name="work_orders"
     )
@@ -63,8 +64,16 @@ class WorkOrder(BaseModel):
         related_name="created_work_orders"
     )
 
+    requested_by_contact = models.ForeignKey(
+        "clients.ClientContact",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="requested_work_orders"
+    )
+
     assigned_to = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
+        "organizations.OrganizationMembership",
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
@@ -73,17 +82,70 @@ class WorkOrder(BaseModel):
 
     due_date = models.DateTimeField(null=True, blank=True)
     completed_at = models.DateTimeField(null=True, blank=True)
+    cancelled_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["organization", "status"]),
+            models.Index(fields=["organization", "priority"]),
+            models.Index(fields=["client", "status"]),
+            models.Index(fields=["assigned_to", "status"]),
+            models.Index(fields=["due_date"]),
+        ]
 
     def __str__(self):
         return f"#{self.id} - {self.title}"
 
-    def mark_completed(self):
-        self.status = self.Status.COMPLETED
-        self.completed_at = timezone.now()
-        self.save(update_fields=["status", "completed_at", "updated_at"])
+    def clean(self):
+        if self.client and self.organization:
+            if self.client.organization_id != self.organization_id:
+                raise ValidationError(
+                    "Selected client does not belong to this organization."
+                )
+
+        if self.asset and self.client:
+            if self.asset.client_id != self.client_id:
+                raise ValidationError(
+                    "Selected asset does not belong to this client."
+                )
+
+        if self.requested_by_contact and self.client:
+            if self.requested_by_contact.client_id != self.client_id:
+                raise ValidationError(
+                    "Requested-by contact does not belong to this client."
+                )
+
+        if self.assigned_to:
+            if self.assigned_to.organization_id != self.organization_id:
+                raise ValidationError(
+                    "Assigned technician must belong to the same organization."
+                )
+
+            if self.assigned_to.role != "TECHNICIAN":
+                raise ValidationError(
+                    "Work order can only be assigned to a technician membership."
+                )
+
+            if not self.assigned_to.is_active:
+                raise ValidationError(
+                    "Cannot assign work order to an inactive technician."
+                )
+
+    def save(self, *args, **kwargs):
+        if self.status == self.Status.COMPLETED and not self.completed_at:
+            self.completed_at = timezone.now()
+
+        if self.status == self.Status.CANCELLED and not self.cancelled_at:
+            self.cancelled_at = timezone.now()
+
+        if self.status != self.Status.COMPLETED:
+            self.completed_at = None
+
+        if self.status != self.Status.CANCELLED:
+            self.cancelled_at = None
+
+        super().save(*args, **kwargs)
 
     @property
     def is_overdue(self):
@@ -94,11 +156,11 @@ class WorkOrder(BaseModel):
             return False
 
         return timezone.now() > self.due_date
-    
+
 
 class WorkOrderUpdate(BaseModel):
     work_order = models.ForeignKey(
-        "workorders.WorkOrder",
+        WorkOrder,
         on_delete=models.CASCADE,
         related_name="updates"
     )
@@ -112,22 +174,21 @@ class WorkOrderUpdate(BaseModel):
 
     message = models.TextField(blank=True)
 
-    old_status = models.CharField(
-        max_length=30,
-        blank=True
-    )
+    old_status = models.CharField(max_length=30, blank=True)
+    new_status = models.CharField(max_length=30, blank=True)
 
-    new_status = models.CharField(
-        max_length=30,
-        blank=True
-    )
+    is_internal = models.BooleanField(default=False)
 
     class Meta:
         ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["work_order", "created_at"]),
+            models.Index(fields=["is_internal"]),
+        ]
 
     def __str__(self):
         return f"Update for WorkOrder #{self.work_order_id}"
-    
+
 
 class Attachment(BaseModel):
     class FileType(models.TextChoices):
@@ -136,7 +197,7 @@ class Attachment(BaseModel):
         OTHER = "OTHER", "Other"
 
     work_order = models.ForeignKey(
-        "workorders.WorkOrder",
+        WorkOrder,
         on_delete=models.CASCADE,
         related_name="attachments"
     )
@@ -149,15 +210,20 @@ class Attachment(BaseModel):
     )
 
     file = models.FileField(upload_to="work_order_attachments/")
+
     file_type = models.CharField(
         max_length=20,
         choices=FileType.choices,
         default=FileType.OTHER
     )
+
     description = models.CharField(max_length=255, blank=True)
 
     class Meta:
         ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["work_order", "file_type"]),
+        ]
 
     def __str__(self):
         return f"Attachment for WorkOrder #{self.work_order_id}"
