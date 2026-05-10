@@ -2,19 +2,19 @@ from django.db import models
 from django.contrib.auth.models import AbstractUser
 from .managers import CustomUserManager
 
-# Role choices
-ROLE_CHOICES = [
-    ('admin', 'Admin'),
-    ('manager', 'Manager'),
-    ('technician', 'Technician'),
-    ('client', 'Client')
-]
 
 class CustomUser(AbstractUser):
+
+    class Role(models.TextChoices):
+        ADMIN = 'admin', 'Admin'
+        MANAGER = 'manager', 'Manager'
+        TECHNICIAN = 'technician', 'Technician'
+        CLIENT = 'client', 'Client'
+        
     username = None
     email = models.EmailField(unique=True)
     full_name = models.CharField(max_length=150)
-    role = models.CharField(max_length=10, choices=ROLE_CHOICES, default='client')
+    role = models.CharField(max_length=10, choices=Role.choices, default=Role.CLIENT)
     phone = models.CharField(max_length=15, blank=True, null=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
