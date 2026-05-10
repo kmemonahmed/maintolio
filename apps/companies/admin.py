@@ -1,3 +1,11 @@
 from django.contrib import admin
 
-# Register your models here.
+from .models import Company
+
+
+@admin.register(Company)
+class CompanyAdmin(admin.ModelAdmin):
+    list_display = ("name", "email", "phone", "created_at")
+    search_fields = ("name", "email", "phone")
+    ordering = ("name",)
+    readonly_fields = ("created_at", "updated_at")
