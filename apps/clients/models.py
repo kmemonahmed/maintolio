@@ -54,8 +54,8 @@ class ClientContact(BaseModel):
         related_name="client_contact_profile"
     )
 
-    full_name = models.CharField(max_length=150)
-    email = models.EmailField()
+    full_name = models.CharField(max_length=150, blank=True)
+    email = models.EmailField(blank=True)
     phone = models.CharField(max_length=30, blank=True)
     position = models.CharField(max_length=100, blank=True)
 
@@ -74,6 +74,7 @@ class ClientContact(BaseModel):
         indexes = [
             models.Index(fields=["client", "is_active"]),
             models.Index(fields=["email"]),
+            models.Index(fields=["can_login"]),
         ]
 
     def clean(self):
@@ -81,6 +82,35 @@ class ClientContact(BaseModel):
             raise ValidationError(
                 "A client contact must be linked to a user account if can_login=True."
             )
+
+        if self.user:
+            if not self.full_name:
+                self.full_name = self.user.full_name
+
+            if not self.email:
+                self.email = self.user.email
+
+            if not self.phone:
+                self.phone = self.user.phone
+
+        if not self.full_name:
+            raise ValidationError("Full name is required.")
+
+        if not self.email:
+            raise ValidationError("Email is required.")
+
+    def save(self, *args, **kwargs):
+        if self.user:
+            if not self.full_name:
+                self.full_name = self.user.full_name
+
+            if not self.email:
+                self.email = self.user.email
+
+            if not self.phone:
+                self.phone = self.user.phone
+
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.full_name} - {self.client.name}"
