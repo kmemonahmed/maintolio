@@ -1,0 +1,23 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Environments
+.env
+.env.*
+!.env.example
+env/
+.venv/
+venv/
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Django
+*.log
+*.pot
+db.sqlite3
+staticfiles/
+media/
