@@ -110,20 +110,40 @@ AUTH_USER_MODEL = "accounts.User"
 
 # REST Framework
 REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
-    ],
-    'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.IsAuthenticated',
-    ],
+    "DEFAULT_AUTHENTICATION_CLASSES": (
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+    ),
+    "DEFAULT_PERMISSION_CLASSES": (
+        "rest_framework.permissions.IsAuthenticated",
+    ),
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
 }
 
 # Spectacular
 SPECTACULAR_SETTINGS = {
-    'TITLE': 'Maintolio API',
-    'DESCRIPTION': 'API for Maintolio',
-    'VERSION': '1.0.0',
-    'SERVE_INCLUDE_SCHEMA': False,
+    "TITLE": "Maintolio API",
+    "DESCRIPTION": "Multi-tenant work order and asset management SaaS API.",
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+
+    "COMPONENT_SPLIT_REQUEST": True,
+
+    "SWAGGER_UI_SETTINGS": {
+        "deepLinking": True,
+        "persistAuthorization": True,
+        "displayOperationId": False,
+    },
+
+    "TAGS": [
+        {"name": "Auth", "description": "Registration, login, current user, and password APIs"},
+        {"name": "Organizations", "description": "Organization profile and tenant context"},
+        {"name": "Team Members", "description": "Organization memberships and roles"},
+        {"name": "Clients", "description": "Client businesses"},
+        {"name": "Client Contacts", "description": "Client-side contacts and portal users"},
+        {"name": "Assets", "description": "Client-owned assets and equipment"},
+        {"name": "Work Orders", "description": "Service request and technician workflow"},
+        {"name": "Reports", "description": "Dashboard and reporting endpoints"},
+    ],
 }
 
 
