@@ -174,8 +174,17 @@ class WorkOrderUpdate(BaseModel):
 
     message = models.TextField(blank=True)
 
-    old_status = models.CharField(max_length=30, blank=True)
-    new_status = models.CharField(max_length=30, blank=True)
+    old_status = models.CharField(
+        max_length=30,
+        choices=WorkOrder.Status.choices,
+        blank=True
+    )
+
+    new_status = models.CharField(
+        max_length=30,
+        choices=WorkOrder.Status.choices,
+        blank=True
+    )
 
     is_internal = models.BooleanField(default=False)
 
@@ -184,6 +193,7 @@ class WorkOrderUpdate(BaseModel):
         indexes = [
             models.Index(fields=["work_order", "created_at"]),
             models.Index(fields=["is_internal"]),
+            models.Index(fields=["user", "created_at"]),
         ]
 
     def __str__(self):
