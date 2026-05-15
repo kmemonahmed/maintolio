@@ -16,6 +16,7 @@ from .serializers import (
     WorkOrderAttachmentUploadSerializer,
     WorkOrderChangeStatusSerializer,
     WorkOrderCreateUpdateSerializer,
+    WorkOrderListSerializer,
     WorkOrderSerializer,
     WorkOrderUpdateSerializer,
 )
@@ -43,10 +44,18 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         current_membership = self.get_current_membership()
 
-        return (
-            WorkOrder.objects
-            .filter(organization=current_membership.organization)
-            .select_related(
+        queryset = WorkOrder.objects.filter(
+            organization=current_membership.organization,
+        )
+
+        if self.action == "list":
+            queryset = queryset.select_related(
+                "asset",
+                "assigned_to",
+                "assigned_to__user",
+            )
+        else:
+            queryset = queryset.select_related(
                 "organization",
                 "client",
                 "asset",
@@ -55,12 +64,15 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
                 "assigned_to",
                 "assigned_to__user",
             )
-            .order_by("-created_at")
-        )
+
+        return queryset.order_by("-created_at")
 
     def get_serializer_class(self):
         if self.action in ["create", "partial_update", "update"]:
             return WorkOrderCreateUpdateSerializer
+
+        if self.action == "list":
+            return WorkOrderListSerializer
 
         return WorkOrderSerializer
 
@@ -68,6 +80,25 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
         context = super().get_serializer_context()
         context["current_membership"] = self.get_current_membership()
         return context
+
+    def get_work_order_for_list_response(self, work_order):
+        return (
+            WorkOrder.objects
+            .filter(
+                organization=self.get_current_membership().organization,
+                pk=work_order.pk,
+            )
+            .select_related(
+                "asset",
+                "assigned_to",
+                "assigned_to__user",
+            )
+            .get()
+        )
+
+    def serialize_work_order_list(self, work_order):
+        work_order = self.get_work_order_for_list_response(work_order)
+        return WorkOrderListSerializer(work_order).data
 
     def require_work_order_manage_permission(self):
         current_membership = self.get_current_membership()
@@ -80,7 +111,7 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
     @extend_schema(
         tags=["Work Orders"],
         summary="List work orders",
-        responses=WorkOrderSerializer(many=True),
+        responses=WorkOrderListSerializer(many=True),
     )
     def list(self, request, *args, **kwargs):
         self.require_work_order_manage_permission()
@@ -99,7 +130,7 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
         tags=["Work Orders"],
         summary="Create work order",
         request=WorkOrderCreateUpdateSerializer,
-        responses=WorkOrderSerializer,
+        responses=WorkOrderListSerializer,
     )
     def create(self, request, *args, **kwargs):
         self.require_work_order_manage_permission()
@@ -114,10 +145,8 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
             created_by=request.user,
         )
 
-        response_serializer = WorkOrderSerializer(work_order)
-
         return Response(
-            response_serializer.data,
+            self.serialize_work_order_list(work_order),
             status=status.HTTP_201_CREATED,
         )
 
@@ -141,10 +170,8 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
 
         work_order = serializer.save()
 
-        response_serializer = WorkOrderSerializer(work_order)
-
         return Response(
-            response_serializer.data,
+            WorkOrderSerializer(work_order).data,
             status=status.HTTP_200_OK,
         )
 
@@ -174,7 +201,7 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
         summary="Assign technician",
         description="Assigns a technician to a work order and changes status to ASSIGNED.",
         request=WorkOrderAssignSerializer,
-        responses=WorkOrderSerializer,
+        responses=WorkOrderListSerializer,
     )
     @action(detail=True, methods=["post"], url_path="assign")
     def assign(self, request, *args, **kwargs):
@@ -194,10 +221,8 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
 
         work_order = serializer.save()
 
-        response_serializer = WorkOrderSerializer(work_order)
-
         return Response(
-            response_serializer.data,
+            self.serialize_work_order_list(work_order),
             status=status.HTTP_200_OK,
         )
 
@@ -220,7 +245,7 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
         summary="Change work order status",
         description="Changes work order status and creates a WorkOrderUpdate audit record.",
         request=WorkOrderChangeStatusSerializer,
-        responses=WorkOrderSerializer,
+        responses=WorkOrderListSerializer,
     )
     @action(detail=True, methods=["post"], url_path="change-status")
     def change_status(self, request, *args, **kwargs):
@@ -240,10 +265,8 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
 
         work_order = serializer.save()
 
-        response_serializer = WorkOrderSerializer(work_order)
-
         return Response(
-            response_serializer.data,
+            self.serialize_work_order_list(work_order),
             status=status.HTTP_200_OK,
         )
 
@@ -408,7 +431,6 @@ class TechnicianWorkOrderViewSet(
     viewsets.GenericViewSet,
 ):
     permission_classes = [IsAuthenticated]
-    serializer_class = WorkOrderSerializer
     http_method_names = ["get", "head", "options"]
 
     def get_current_membership(self):
@@ -425,13 +447,19 @@ class TechnicianWorkOrderViewSet(
                 "Only technicians can access the technician work order portal."
             )
 
-        return (
-            WorkOrder.objects
-            .filter(
-                organization=current_membership.organization,
-                assigned_to=current_membership,
+        queryset = WorkOrder.objects.filter(
+            organization=current_membership.organization,
+            assigned_to=current_membership,
+        )
+
+        if self.action == "list":
+            queryset = queryset.select_related(
+                "asset",
+                "assigned_to",
+                "assigned_to__user",
             )
-            .select_related(
+        else:
+            queryset = queryset.select_related(
                 "organization",
                 "client",
                 "asset",
@@ -440,14 +468,20 @@ class TechnicianWorkOrderViewSet(
                 "assigned_to",
                 "assigned_to__user",
             )
-            .order_by("-created_at")
-        )
+
+        return queryset.order_by("-created_at")
+
+    def get_serializer_class(self):
+        if self.action == "list":
+            return WorkOrderListSerializer
+
+        return WorkOrderSerializer
 
     @extend_schema(
         tags=["Technician Portal"],
         summary="List assigned work orders",
         description="Returns work orders assigned to the logged-in technician.",
-        responses=WorkOrderSerializer(many=True),
+        responses=WorkOrderListSerializer(many=True),
     )
     def list(self, request, *args, **kwargs):
         return super().list(request, *args, **kwargs)

@@ -64,6 +64,61 @@ class AssignedTechnicianMiniSerializer(serializers.Serializer):
     user = WorkOrderUserMiniSerializer()
 
 
+class WorkOrderListAssetSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Asset
+        fields = (
+            "id",
+            "name",
+        )
+class WorkOrderListClientSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Client
+        fields = (
+            "id",
+            "name",
+        )
+
+
+
+class WorkOrderListUserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = (
+            "id",
+            "full_name",
+        )
+
+
+class WorkOrderListAssignedSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    user = WorkOrderListUserSerializer()
+
+
+class WorkOrderListSerializer(serializers.ModelSerializer):
+    asset = WorkOrderListAssetSerializer(read_only=True)
+    assigned_to = WorkOrderListAssignedSerializer(read_only=True)
+    is_overdue = serializers.BooleanField(read_only=True)
+    client = WorkOrderListClientSerializer(read_only=True)
+
+
+    class Meta:
+        model = WorkOrder
+        fields = (
+            "id",
+            "title",
+            "client",
+            "asset",
+            "priority",
+            "status",
+            "assigned_to",
+            "due_date",
+            "is_overdue",
+            "created_at",
+            "completed_at",
+        )
+
+
 class WorkOrderSerializer(serializers.ModelSerializer):
     organization = serializers.StringRelatedField(read_only=True)
     client = WorkOrderClientMiniSerializer(read_only=True)
