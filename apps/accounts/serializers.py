@@ -77,7 +77,7 @@ class OrganizationRegisterSerializer(serializers.Serializer):
 
 # Serializer for organization data only
 class OrganizationMiniSerializer(serializers.Serializer):
-    id = serializers.IntegerField()
+    id = serializers.UUIDField()
     name = serializers.CharField()
     slug = serializers.CharField()
 
@@ -97,9 +97,9 @@ class MembershipMeSerializer(serializers.ModelSerializer):
 
 # Serializer for client contact
 class ClientContactMeSerializer(serializers.ModelSerializer):
-    client_id = serializers.IntegerField(source="client.id")
+    client_id = serializers.UUIDField(source="client.id")
     client_name = serializers.CharField(source="client.name")
-    organization_id = serializers.IntegerField(source="client.organization.id")
+    organization_id = serializers.UUIDField(source="client.organization.id")
     organization_name = serializers.CharField(source="client.organization.name")
 
     class Meta:
@@ -121,7 +121,7 @@ class ClientContactMeSerializer(serializers.ModelSerializer):
 
 # Profile serializer
 class MeSerializer(serializers.Serializer):
-    id = serializers.IntegerField()
+    id = serializers.UUIDField()
     email = serializers.EmailField()
     full_name = serializers.CharField()
     phone = serializers.CharField()
