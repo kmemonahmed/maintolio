@@ -22,6 +22,8 @@ from .serializers import (
     WorkOrderSerializer,
     WorkOrderUpdateSerializer,
     WorkOrderListSerializer,
+    ClientPortalAddCommentSerializer,
+    ClientPortalAttachmentUploadSerializer
 )
 
 
@@ -617,3 +619,113 @@ class ClientPortalWorkOrderViewSet(
     )
     def retrieve(self, request, *args, **kwargs):
         return super().retrieve(request, *args, **kwargs)
+
+
+    @extend_schema(
+        tags=["Client Portal"],
+        summary="Add comment to service request",
+        description="Adds a public client comment to a service request. Internal notes are not allowed from client portal.",
+        request=ClientPortalAddCommentSerializer,
+        responses=WorkOrderUpdateSerializer,
+    )
+    @action(detail=True, methods=["post"], url_path="add-comment")
+    def add_comment(self, request, *args, **kwargs):
+        work_order = self.get_object()
+
+        serializer = ClientPortalAddCommentSerializer(
+            data=request.data,
+            context={
+                "request": request,
+                "work_order": work_order,
+                "client_contact": self.get_client_contact(),
+            },
+        )
+        serializer.is_valid(raise_exception=True)
+
+        update = serializer.save()
+
+        response_serializer = WorkOrderUpdateSerializer(update)
+
+        return Response(
+            response_serializer.data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    @extend_schema(
+        tags=["Client Portal"],
+        summary="Upload attachment to service request",
+        description="Uploads a client-side attachment to a service request.",
+        request=ClientPortalAttachmentUploadSerializer,
+        responses=AttachmentSerializer,
+    )
+    @action(detail=True, methods=["post"], url_path="upload-attachment")
+    def upload_attachment(self, request, *args, **kwargs):
+        work_order = self.get_object()
+
+        serializer = ClientPortalAttachmentUploadSerializer(
+            data=request.data,
+            context={
+                "request": request,
+                "work_order": work_order,
+                "client_contact": self.get_client_contact(),
+            },
+        )
+        serializer.is_valid(raise_exception=True)
+
+        attachment = serializer.save()
+
+        response_serializer = AttachmentSerializer(
+            attachment,
+            context={"request": request},
+        )
+
+        return Response(
+            response_serializer.data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    @extend_schema(
+        tags=["Client Portal"],
+        summary="List service request updates",
+        description="Returns only public updates for a client service request. Internal notes are hidden.",
+        responses=WorkOrderUpdateSerializer(many=True),
+    )
+    @action(detail=True, methods=["get"], url_path="updates")
+    def updates(self, request, *args, **kwargs):
+        work_order = self.get_object()
+
+        updates = (
+            work_order.updates
+            .filter(is_internal=False)
+            .select_related("user")
+            .order_by("-created_at")
+        )
+
+        serializer = WorkOrderUpdateSerializer(updates, many=True)
+
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+    @extend_schema(
+        tags=["Client Portal"],
+        summary="List service request attachments",
+        description="Returns attachments uploaded to a client service request.",
+        responses=AttachmentSerializer(many=True),
+    )
+    @action(detail=True, methods=["get"], url_path="attachments")
+    def attachments(self, request, *args, **kwargs):
+        work_order = self.get_object()
+
+        attachments = (
+            work_order.attachments
+            .select_related("uploaded_by")
+            .order_by("-created_at")
+        )
+
+        serializer = AttachmentSerializer(
+            attachments,
+            many=True,
+            context={"request": request},
+        )
+
+        return Response(serializer.data, status=status.HTTP_200_OK)

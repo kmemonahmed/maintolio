@@ -548,3 +548,57 @@ class ClientPortalWorkOrderCreateSerializer(serializers.ModelSerializer):
                 )
 
         return attrs
+
+
+class ClientPortalAddCommentSerializer(serializers.Serializer):
+    message = serializers.CharField()
+
+    def validate_message(self, value):
+        value = value.strip()
+
+        if not value:
+            raise serializers.ValidationError("Message cannot be empty.")
+
+        return value
+
+    def create(self, validated_data):
+        work_order = self.context["work_order"]
+        request = self.context["request"]
+
+        update = WorkOrderUpdate.objects.create(
+            work_order=work_order,
+            user=request.user,
+            message=validated_data["message"],
+            old_status=work_order.status,
+            new_status=work_order.status,
+            is_internal=False,
+        )
+
+        return update
+
+
+class ClientPortalAttachmentUploadSerializer(serializers.Serializer):
+    file = serializers.FileField()
+    file_type = serializers.ChoiceField(
+        choices=Attachment.FileType.choices,
+        default=Attachment.FileType.OTHER,
+    )
+    description = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=255,
+    )
+
+    def create(self, validated_data):
+        work_order = self.context["work_order"]
+        request = self.context["request"]
+
+        attachment = Attachment.objects.create(
+            work_order=work_order,
+            uploaded_by=request.user,
+            file=validated_data["file"],
+            file_type=validated_data.get("file_type", Attachment.FileType.OTHER),
+            description=validated_data.get("description", ""),
+        )
+
+        return attachment
