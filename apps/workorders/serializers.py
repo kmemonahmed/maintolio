@@ -151,6 +151,34 @@ class WorkOrderSerializer(serializers.ModelSerializer):
         )
 
 
+class ClientPortalWorkOrderRetrieveSerializer(serializers.ModelSerializer):
+    asset = WorkOrderAssetMiniSerializer(read_only=True)
+    created_by = WorkOrderUserMiniSerializer(read_only=True)
+    requested_by_contact = WorkOrderClientContactMiniSerializer(read_only=True)
+    assigned_to = AssignedTechnicianMiniSerializer(read_only=True)
+    is_overdue = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = WorkOrder
+        fields = (
+            "id",
+            "asset",
+            "title",
+            "description",
+            "priority",
+            "status",
+            "created_by",
+            "requested_by_contact",
+            "assigned_to",
+            "due_date",
+            "completed_at",
+            "cancelled_at",
+            "is_overdue",
+            "created_at",
+            "updated_at",
+        )
+
+
 class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
     client = serializers.PrimaryKeyRelatedField(
         queryset=Client.objects.none()
@@ -477,3 +505,46 @@ class WorkOrderAttachmentUploadSerializer(serializers.Serializer):
         )
 
         return attachment
+
+
+class ClientPortalWorkOrderCreateSerializer(serializers.ModelSerializer):
+    asset = serializers.PrimaryKeyRelatedField(
+        queryset=Asset.objects.none(),
+        required=False,
+        allow_null=True,
+    )
+
+    class Meta:
+        model = WorkOrder
+        fields = (
+            "asset",
+            "title",
+            "description",
+            "priority",
+        )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        client_contact = self.context.get("client_contact")
+
+        if client_contact:
+            self.fields["asset"].queryset = Asset.objects.filter(
+                client=client_contact.client,
+            ).exclude(
+                status=Asset.Status.RETIRED,
+            )
+        else:
+            self.fields["asset"].queryset = Asset.objects.none()
+
+    def validate(self, attrs):
+        client_contact = self.context.get("client_contact")
+        asset = attrs.get("asset")
+
+        if asset and client_contact:
+            if asset.client_id != client_contact.client_id:
+                raise serializers.ValidationError(
+                    {"asset": "Selected asset does not belong to your client profile."}
+                )
+
+        return attrs

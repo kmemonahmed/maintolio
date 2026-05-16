@@ -9,16 +9,19 @@ from apps.organizations.models import OrganizationMembership
 from apps.organizations.utils import get_current_membership
 
 from .models import WorkOrder
+
 from .serializers import (
     AttachmentSerializer,
+    ClientPortalWorkOrderCreateSerializer,
+    ClientPortalWorkOrderRetrieveSerializer,
     WorkOrderAddUpdateSerializer,
     WorkOrderAssignSerializer,
     WorkOrderAttachmentUploadSerializer,
     WorkOrderChangeStatusSerializer,
     WorkOrderCreateUpdateSerializer,
-    WorkOrderListSerializer,
     WorkOrderSerializer,
     WorkOrderUpdateSerializer,
+    WorkOrderListSerializer,
 )
 
 
@@ -491,6 +494,126 @@ class TechnicianWorkOrderViewSet(
         summary="Retrieve assigned work order",
         description="Returns a single work order only if it is assigned to the logged-in technician.",
         responses=WorkOrderSerializer,
+    )
+    def retrieve(self, request, *args, **kwargs):
+        return super().retrieve(request, *args, **kwargs)
+
+
+class ClientPortalWorkOrderViewSet(
+    mixins.ListModelMixin,
+    mixins.CreateModelMixin,
+    mixins.RetrieveModelMixin,
+    viewsets.GenericViewSet,
+):
+    permission_classes = [IsAuthenticated]
+    http_method_names = ["get", "post", "head", "options"]
+
+    def get_client_contact(self):
+        if hasattr(self, "_client_contact"):
+            return self._client_contact
+
+        try:
+            client_contact = self.request.user.client_contact_profile
+        except Exception:
+            raise PermissionDenied(
+                "Only client contacts can access the client portal."
+            )
+
+        if not client_contact.is_active or not client_contact.can_login:
+            raise PermissionDenied(
+                "Your client portal access is inactive."
+            )
+
+        if not client_contact.client.is_active:
+            raise PermissionDenied(
+                "Your client account is inactive."
+            )
+
+        self._client_contact = client_contact
+        return self._client_contact
+
+    def get_queryset(self):
+        client_contact = self.get_client_contact()
+
+        queryset = WorkOrder.objects.filter(client=client_contact.client)
+
+        if self.action == "retrieve":
+            queryset = queryset.select_related(
+                "asset",
+                "created_by",
+                "requested_by_contact",
+                "assigned_to",
+                "assigned_to__user",
+            )
+        else:
+            queryset = queryset.select_related(
+                "organization",
+                "client",
+                "asset",
+                "created_by",
+                "requested_by_contact",
+                "assigned_to",
+                "assigned_to__user",
+            )
+
+        return queryset.order_by("-created_at")
+
+    def get_serializer_class(self):
+        if self.action == "create":
+            return ClientPortalWorkOrderCreateSerializer
+
+        if self.action == "retrieve":
+            return ClientPortalWorkOrderRetrieveSerializer
+
+        return WorkOrderListSerializer
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["client_contact"] = self.get_client_contact()
+        return context
+
+    @extend_schema(
+        tags=["Client Portal"],
+        summary="List client service requests",
+        description="Returns work orders belonging to the logged-in client contact's client.",
+        responses=WorkOrderListSerializer(many=True),
+    )
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
+
+    @extend_schema(
+        tags=["Client Portal"],
+        summary="Create service request",
+        description="Creates a work order for the logged-in client contact's client.",
+        request=ClientPortalWorkOrderCreateSerializer,
+        responses=WorkOrderListSerializer,
+    )
+    def create(self, request, *args, **kwargs):
+        client_contact = self.get_client_contact()
+
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        work_order = serializer.save(
+            organization=client_contact.client.organization,
+            client=client_contact.client,
+            requested_by_contact=client_contact,
+            created_by=request.user,
+            status=WorkOrder.Status.OPEN,
+        )
+
+        response_serializer = WorkOrderListSerializer(work_order)
+
+        return Response(
+            response_serializer.data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    @extend_schema(
+        tags=["Client Portal"],
+        summary="Retrieve client service request",
+        description="Returns one work order only if it belongs to the logged-in client contact's client.",
+        responses=ClientPortalWorkOrderRetrieveSerializer,
     )
     def retrieve(self, request, *args, **kwargs):
         return super().retrieve(request, *args, **kwargs)
