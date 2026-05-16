@@ -9,16 +9,21 @@ from apps.organizations.models import OrganizationMembership
 from apps.organizations.utils import get_current_membership
 
 from .models import WorkOrder
+
 from .serializers import (
     AttachmentSerializer,
+    ClientPortalWorkOrderCreateSerializer,
+    ClientPortalWorkOrderRetrieveSerializer,
     WorkOrderAddUpdateSerializer,
     WorkOrderAssignSerializer,
     WorkOrderAttachmentUploadSerializer,
     WorkOrderChangeStatusSerializer,
     WorkOrderCreateUpdateSerializer,
-    WorkOrderListSerializer,
     WorkOrderSerializer,
     WorkOrderUpdateSerializer,
+    WorkOrderListSerializer,
+    ClientPortalAddCommentSerializer,
+    ClientPortalAttachmentUploadSerializer
 )
 
 
@@ -494,3 +499,233 @@ class TechnicianWorkOrderViewSet(
     )
     def retrieve(self, request, *args, **kwargs):
         return super().retrieve(request, *args, **kwargs)
+
+
+class ClientPortalWorkOrderViewSet(
+    mixins.ListModelMixin,
+    mixins.CreateModelMixin,
+    mixins.RetrieveModelMixin,
+    viewsets.GenericViewSet,
+):
+    permission_classes = [IsAuthenticated]
+    http_method_names = ["get", "post", "head", "options"]
+
+    def get_client_contact(self):
+        if hasattr(self, "_client_contact"):
+            return self._client_contact
+
+        try:
+            client_contact = self.request.user.client_contact_profile
+        except Exception:
+            raise PermissionDenied(
+                "Only client contacts can access the client portal."
+            )
+
+        if not client_contact.is_active or not client_contact.can_login:
+            raise PermissionDenied(
+                "Your client portal access is inactive."
+            )
+
+        if not client_contact.client.is_active:
+            raise PermissionDenied(
+                "Your client account is inactive."
+            )
+
+        self._client_contact = client_contact
+        return self._client_contact
+
+    def get_queryset(self):
+        client_contact = self.get_client_contact()
+
+        queryset = WorkOrder.objects.filter(client=client_contact.client)
+
+        if self.action == "retrieve":
+            queryset = queryset.select_related(
+                "asset",
+                "created_by",
+                "requested_by_contact",
+                "assigned_to",
+                "assigned_to__user",
+            )
+        else:
+            queryset = queryset.select_related(
+                "organization",
+                "client",
+                "asset",
+                "created_by",
+                "requested_by_contact",
+                "assigned_to",
+                "assigned_to__user",
+            )
+
+        return queryset.order_by("-created_at")
+
+    def get_serializer_class(self):
+        if self.action == "create":
+            return ClientPortalWorkOrderCreateSerializer
+
+        if self.action == "retrieve":
+            return ClientPortalWorkOrderRetrieveSerializer
+
+        return WorkOrderListSerializer
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["client_contact"] = self.get_client_contact()
+        return context
+
+    @extend_schema(
+        tags=["Client Portal"],
+        summary="List client service requests",
+        description="Returns work orders belonging to the logged-in client contact's client.",
+        responses=WorkOrderListSerializer(many=True),
+    )
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
+
+    @extend_schema(
+        tags=["Client Portal"],
+        summary="Create service request",
+        description="Creates a work order for the logged-in client contact's client.",
+        request=ClientPortalWorkOrderCreateSerializer,
+        responses=WorkOrderListSerializer,
+    )
+    def create(self, request, *args, **kwargs):
+        client_contact = self.get_client_contact()
+
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        work_order = serializer.save(
+            organization=client_contact.client.organization,
+            client=client_contact.client,
+            requested_by_contact=client_contact,
+            created_by=request.user,
+            status=WorkOrder.Status.OPEN,
+        )
+
+        response_serializer = WorkOrderListSerializer(work_order)
+
+        return Response(
+            response_serializer.data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    @extend_schema(
+        tags=["Client Portal"],
+        summary="Retrieve client service request",
+        description="Returns one work order only if it belongs to the logged-in client contact's client.",
+        responses=ClientPortalWorkOrderRetrieveSerializer,
+    )
+    def retrieve(self, request, *args, **kwargs):
+        return super().retrieve(request, *args, **kwargs)
+
+
+    @extend_schema(
+        tags=["Client Portal"],
+        summary="Add comment to service request",
+        description="Adds a public client comment to a service request. Internal notes are not allowed from client portal.",
+        request=ClientPortalAddCommentSerializer,
+        responses=WorkOrderUpdateSerializer,
+    )
+    @action(detail=True, methods=["post"], url_path="add-comment")
+    def add_comment(self, request, *args, **kwargs):
+        work_order = self.get_object()
+
+        serializer = ClientPortalAddCommentSerializer(
+            data=request.data,
+            context={
+                "request": request,
+                "work_order": work_order,
+                "client_contact": self.get_client_contact(),
+            },
+        )
+        serializer.is_valid(raise_exception=True)
+
+        update = serializer.save()
+
+        response_serializer = WorkOrderUpdateSerializer(update)
+
+        return Response(
+            response_serializer.data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    @extend_schema(
+        tags=["Client Portal"],
+        summary="Upload attachment to service request",
+        description="Uploads a client-side attachment to a service request.",
+        request=ClientPortalAttachmentUploadSerializer,
+        responses=AttachmentSerializer,
+    )
+    @action(detail=True, methods=["post"], url_path="upload-attachment")
+    def upload_attachment(self, request, *args, **kwargs):
+        work_order = self.get_object()
+
+        serializer = ClientPortalAttachmentUploadSerializer(
+            data=request.data,
+            context={
+                "request": request,
+                "work_order": work_order,
+                "client_contact": self.get_client_contact(),
+            },
+        )
+        serializer.is_valid(raise_exception=True)
+
+        attachment = serializer.save()
+
+        response_serializer = AttachmentSerializer(
+            attachment,
+            context={"request": request},
+        )
+
+        return Response(
+            response_serializer.data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    @extend_schema(
+        tags=["Client Portal"],
+        summary="List service request updates",
+        description="Returns only public updates for a client service request. Internal notes are hidden.",
+        responses=WorkOrderUpdateSerializer(many=True),
+    )
+    @action(detail=True, methods=["get"], url_path="updates")
+    def updates(self, request, *args, **kwargs):
+        work_order = self.get_object()
+
+        updates = (
+            work_order.updates
+            .filter(is_internal=False)
+            .select_related("user")
+            .order_by("-created_at")
+        )
+
+        serializer = WorkOrderUpdateSerializer(updates, many=True)
+
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+    @extend_schema(
+        tags=["Client Portal"],
+        summary="List service request attachments",
+        description="Returns attachments uploaded to a client service request.",
+        responses=AttachmentSerializer(many=True),
+    )
+    @action(detail=True, methods=["get"], url_path="attachments")
+    def attachments(self, request, *args, **kwargs):
+        work_order = self.get_object()
+
+        attachments = (
+            work_order.attachments
+            .select_related("uploaded_by")
+            .order_by("-created_at")
+        )
+
+        serializer = AttachmentSerializer(
+            attachments,
+            many=True,
+            context={"request": request},
+        )
+
+        return Response(serializer.data, status=status.HTTP_200_OK)

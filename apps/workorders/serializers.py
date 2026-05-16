@@ -151,6 +151,34 @@ class WorkOrderSerializer(serializers.ModelSerializer):
         )
 
 
+class ClientPortalWorkOrderRetrieveSerializer(serializers.ModelSerializer):
+    asset = WorkOrderAssetMiniSerializer(read_only=True)
+    created_by = WorkOrderUserMiniSerializer(read_only=True)
+    requested_by_contact = WorkOrderClientContactMiniSerializer(read_only=True)
+    assigned_to = AssignedTechnicianMiniSerializer(read_only=True)
+    is_overdue = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = WorkOrder
+        fields = (
+            "id",
+            "asset",
+            "title",
+            "description",
+            "priority",
+            "status",
+            "created_by",
+            "requested_by_contact",
+            "assigned_to",
+            "due_date",
+            "completed_at",
+            "cancelled_at",
+            "is_overdue",
+            "created_at",
+            "updated_at",
+        )
+
+
 class WorkOrderCreateUpdateSerializer(serializers.ModelSerializer):
     client = serializers.PrimaryKeyRelatedField(
         queryset=Client.objects.none()
@@ -453,6 +481,103 @@ class AttachmentSerializer(serializers.ModelSerializer):
 
 
 class WorkOrderAttachmentUploadSerializer(serializers.Serializer):
+    file = serializers.FileField()
+    file_type = serializers.ChoiceField(
+        choices=Attachment.FileType.choices,
+        default=Attachment.FileType.OTHER,
+    )
+    description = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=255,
+    )
+
+    def create(self, validated_data):
+        work_order = self.context["work_order"]
+        request = self.context["request"]
+
+        attachment = Attachment.objects.create(
+            work_order=work_order,
+            uploaded_by=request.user,
+            file=validated_data["file"],
+            file_type=validated_data.get("file_type", Attachment.FileType.OTHER),
+            description=validated_data.get("description", ""),
+        )
+
+        return attachment
+
+
+class ClientPortalWorkOrderCreateSerializer(serializers.ModelSerializer):
+    asset = serializers.PrimaryKeyRelatedField(
+        queryset=Asset.objects.none(),
+        required=False,
+        allow_null=True,
+    )
+
+    class Meta:
+        model = WorkOrder
+        fields = (
+            "asset",
+            "title",
+            "description",
+            "priority",
+        )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        client_contact = self.context.get("client_contact")
+
+        if client_contact:
+            self.fields["asset"].queryset = Asset.objects.filter(
+                client=client_contact.client,
+            ).exclude(
+                status=Asset.Status.RETIRED,
+            )
+        else:
+            self.fields["asset"].queryset = Asset.objects.none()
+
+    def validate(self, attrs):
+        client_contact = self.context.get("client_contact")
+        asset = attrs.get("asset")
+
+        if asset and client_contact:
+            if asset.client_id != client_contact.client_id:
+                raise serializers.ValidationError(
+                    {"asset": "Selected asset does not belong to your client profile."}
+                )
+
+        return attrs
+
+
+class ClientPortalAddCommentSerializer(serializers.Serializer):
+    message = serializers.CharField()
+
+    def validate_message(self, value):
+        value = value.strip()
+
+        if not value:
+            raise serializers.ValidationError("Message cannot be empty.")
+
+        return value
+
+    def create(self, validated_data):
+        work_order = self.context["work_order"]
+        request = self.context["request"]
+
+        update = WorkOrderUpdate.objects.create(
+            work_order=work_order,
+            user=request.user,
+            message=validated_data["message"],
+            old_status=work_order.status,
+            new_status=work_order.status,
+            is_internal=False,
+        )
+
+        return update
+
+
+class ClientPortalAttachmentUploadSerializer(serializers.Serializer):
     file = serializers.FileField()
     file_type = serializers.ChoiceField(
         choices=Attachment.FileType.choices,
