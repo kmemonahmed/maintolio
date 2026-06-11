@@ -1,5 +1,6 @@
 import environ
 import os
+from celery.schedules import crontab
 from pathlib import Path
 from datetime import timedelta
 
@@ -112,6 +113,16 @@ CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = TIME_ZONE
+CELERY_BEAT_SCHEDULE = {
+    "mark-overdue-work-orders-every-15-minutes": {
+        "task": "apps.workorders.tasks.mark_overdue_work_orders",
+        "schedule": crontab(minute="*/15"),
+    },
+    "generate-daily-work-order-summaries": {
+        "task": "apps.reports.tasks.generate_daily_work_order_summaries",
+        "schedule": crontab(minute=10, hour=0),
+    },
+}
 
 
 # Cache
