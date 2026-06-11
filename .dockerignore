@@ -1,0 +1,12 @@
+.git
+.env
+.env.*
+!.env.example
+env/
+.venv/
+venv/
+__pycache__/
+*.pyc
+staticfiles/
+media/
+wf.pdf
