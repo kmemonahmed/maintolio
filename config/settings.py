@@ -34,6 +34,7 @@ INSTALLED_APPS = [
     "rest_framework_simplejwt",
     'drf_spectacular',
     "rest_framework_simplejwt.token_blacklist",
+    "django_celery_beat",
 
     # Local apps
     'apps.accounts',
@@ -96,6 +97,31 @@ TIME_ZONE = 'UTC'
 USE_I18N = True
 
 USE_TZ = True
+
+
+# Celery
+CELERY_BROKER_URL = env(
+    "CELERY_BROKER_URL",
+    default="amqp://guest:guest@rabbitmq:5672//",
+)
+CELERY_RESULT_BACKEND = env(
+    "CELERY_RESULT_BACKEND",
+    default="redis://redis:6379/0",
+)
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_TIMEZONE = TIME_ZONE
+
+
+# Cache
+REDIS_CACHE_URL = env("REDIS_CACHE_URL", default="redis://redis:6379/1")
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": REDIS_CACHE_URL,
+    }
+}
 
 
 # Static files (CSS, JavaScript, Images)
