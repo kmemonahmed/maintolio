@@ -5,38 +5,65 @@ services:
     env_file:
       - .env
     environment:
+      DB_ENGINE: ${DB_ENGINE:-django.db.backends.postgresql}
+      DB_NAME: ${DB_NAME:-maintolio}
+      DB_USER: ${DB_USER:-maintolio}
+      DB_PASSWORD: ${DB_PASSWORD:-maintolio}
       DB_HOST: db
-      CELERY_BROKER_URL: amqp://guest:guest@rabbitmq:5672//
-      CELERY_RESULT_BACKEND: redis://redis:6379/0
-      REDIS_CACHE_URL: redis://redis:6379/1
+      DB_PORT: 5432
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-amqp://guest:guest@rabbitmq:5672//}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/0}
+      REDIS_CACHE_URL: ${REDIS_CACHE_URL:-redis://redis:6379/1}
     volumes:
       - .:/app
     ports:
       - "8000:8000"
     depends_on:
-      - db
-      - rabbitmq
-      - redis
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   db:
     image: postgres:17-alpine
     environment:
-      POSTGRES_DB: maintolio
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: admin
+      POSTGRES_DB: ${DB_NAME:-maintolio}
+      POSTGRES_USER: ${DB_USER:-maintolio}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-maintolio}
+    ports:
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   rabbitmq:
     image: rabbitmq:3-management
     ports:
       - "5672:5672"
       - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:alpine
     ports:
       - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   celery_worker:
     build: .
@@ -44,17 +71,24 @@ services:
     env_file:
       - .env
     environment:
+      DB_ENGINE: ${DB_ENGINE:-django.db.backends.postgresql}
+      DB_NAME: ${DB_NAME:-maintolio}
+      DB_USER: ${DB_USER:-maintolio}
+      DB_PASSWORD: ${DB_PASSWORD:-maintolio}
       DB_HOST: db
-      CELERY_BROKER_URL: amqp://guest:guest@rabbitmq:5672//
-      CELERY_RESULT_BACKEND: redis://redis:6379/0
-      REDIS_CACHE_URL: redis://redis:6379/1
+      DB_PORT: 5432
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-amqp://guest:guest@rabbitmq:5672//}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/0}
+      REDIS_CACHE_URL: ${REDIS_CACHE_URL:-redis://redis:6379/1}
     volumes:
       - .:/app
     depends_on:
-      - web
-      - db
-      - rabbitmq
-      - redis
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   celery_beat:
     build: .
@@ -62,17 +96,25 @@ services:
     env_file:
       - .env
     environment:
+      DB_ENGINE: ${DB_ENGINE:-django.db.backends.postgresql}
+      DB_NAME: ${DB_NAME:-maintolio}
+      DB_USER: ${DB_USER:-maintolio}
+      DB_PASSWORD: ${DB_PASSWORD:-maintolio}
       DB_HOST: db
-      CELERY_BROKER_URL: amqp://guest:guest@rabbitmq:5672//
-      CELERY_RESULT_BACKEND: redis://redis:6379/0
-      REDIS_CACHE_URL: redis://redis:6379/1
+      DB_PORT: 5432
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-amqp://guest:guest@rabbitmq:5672//}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/0}
+      REDIS_CACHE_URL: ${REDIS_CACHE_URL:-redis://redis:6379/1}
     volumes:
       - .:/app
     depends_on:
-      - web
-      - db
-      - rabbitmq
-      - redis
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
 volumes:
   postgres_data:
+  rabbitmq_data:
