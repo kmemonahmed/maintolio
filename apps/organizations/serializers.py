@@ -1,3 +1,4 @@
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.accounts.models import User
@@ -36,7 +37,8 @@ class CurrentOrganizationResponseSerializer(serializers.Serializer):
     organization = OrganizationSerializer()
     membership = serializers.SerializerMethodField()
 
-    def get_membership(self, obj):
+    @extend_schema_field(serializers.DictField())
+    def get_membership(self, obj) -> dict:
         membership = obj["membership"]
 
         return {

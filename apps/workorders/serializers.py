@@ -3,6 +3,13 @@ from rest_framework import serializers
 
 from apps.assets.models import Asset
 from apps.clients.models import Client, ClientContact
+from apps.notifications.services import (
+    notify_client_comment_added,
+    notify_client_request_created,
+    notify_public_work_order_update_added,
+    notify_work_order_assigned,
+    notify_work_order_status_changed,
+)
 from apps.workorders.models import Attachment, WorkOrder, WorkOrderUpdate
 from apps.organizations.models import OrganizationMembership
 
@@ -340,6 +347,11 @@ class WorkOrderAssignSerializer(serializers.Serializer):
             is_internal=True,
         )
 
+        notify_work_order_assigned(
+            instance,
+            actor=self.context["request"].user,
+        )
+
         return instance
 
 
@@ -418,6 +430,14 @@ class WorkOrderChangeStatusSerializer(serializers.Serializer):
             is_internal=is_internal,
         )
 
+        notify_work_order_status_changed(
+            instance,
+            old_status,
+            new_status,
+            actor=self.context["request"].user,
+            is_internal=is_internal,
+        )
+
         return instance
 
 class WorkOrderUpdateSerializer(serializers.ModelSerializer):
@@ -461,6 +481,12 @@ class WorkOrderAddUpdateSerializer(serializers.Serializer):
             new_status=work_order.status,
             is_internal=validated_data.get("is_internal", False),
         )
+
+        if not update.is_internal:
+            notify_public_work_order_update_added(
+                work_order,
+                actor=request.user,
+            )
 
         return update
 
@@ -549,6 +575,18 @@ class ClientPortalWorkOrderCreateSerializer(serializers.ModelSerializer):
 
         return attrs
 
+    def create(self, validated_data):
+        request = self.context["request"]
+
+        work_order = WorkOrder.objects.create(**validated_data)
+
+        notify_client_request_created(
+            work_order,
+            actor=request.user,
+        )
+
+        return work_order
+
 
 class ClientPortalAddCommentSerializer(serializers.Serializer):
     message = serializers.CharField()
@@ -572,6 +610,11 @@ class ClientPortalAddCommentSerializer(serializers.Serializer):
             old_status=work_order.status,
             new_status=work_order.status,
             is_internal=False,
+        )
+
+        notify_client_comment_added(
+            work_order,
+            actor=request.user,
         )
 
         return update

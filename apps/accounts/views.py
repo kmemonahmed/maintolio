@@ -1,9 +1,7 @@
 from drf_spectacular.utils import extend_schema
-from rest_framework import status
+from rest_framework import generics, status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.views import APIView
-from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
@@ -34,8 +32,9 @@ class CustomTokenRefreshView(TokenRefreshView):
         return super().post(request, *args, **kwargs)
 
 # Organization Register
-class OrganizationRegisterView(APIView):
+class OrganizationRegisterView(generics.GenericAPIView):
     permission_classes = [AllowAny]
+    serializer_class = OrganizationRegisterSerializer
 
     @extend_schema(
         tags=["Auth"],
@@ -43,7 +42,7 @@ class OrganizationRegisterView(APIView):
         request=OrganizationRegisterSerializer,
     )
     def post(self, request):
-        serializer = OrganizationRegisterSerializer(data=request.data)
+        serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         result = serializer.save()
@@ -80,8 +79,9 @@ class OrganizationRegisterView(APIView):
 
 
 # Profile view
-class MeView(APIView):
+class MeView(generics.GenericAPIView):
     permission_classes = [IsAuthenticated]
+    serializer_class = MeSerializer
 
     @extend_schema(
         tags=["Auth"],
@@ -89,13 +89,14 @@ class MeView(APIView):
         responses=MeSerializer,
     )
     def get(self, request):
-        serializer = MeSerializer(request.user)
+        serializer = self.get_serializer(request.user)
         return Response(serializer.data)
 
 
 # Change Password
-class ChangePasswordView(APIView):
+class ChangePasswordView(generics.GenericAPIView):
     permission_classes = [IsAuthenticated]
+    serializer_class = ChangePasswordSerializer
 
     @extend_schema(
         tags=["Auth"],
@@ -104,7 +105,7 @@ class ChangePasswordView(APIView):
         request=ChangePasswordSerializer,
     )
     def post(self, request):
-        serializer = ChangePasswordSerializer(
+        serializer = self.get_serializer(
             data=request.data,
             context={"request": request}
         )
@@ -118,8 +119,9 @@ class ChangePasswordView(APIView):
 
 
 # Logout
-class LogoutView(APIView):
+class LogoutView(generics.GenericAPIView):
     permission_classes = [IsAuthenticated]
+    serializer_class = LogoutSerializer
 
     @extend_schema(
         tags=["Auth"],
@@ -128,7 +130,7 @@ class LogoutView(APIView):
         request=LogoutSerializer,
     )
     def post(self, request):
-        serializer = LogoutSerializer(data=request.data)
+        serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         refresh_token = serializer.validated_data["refresh"]

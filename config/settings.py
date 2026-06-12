@@ -34,6 +34,7 @@ INSTALLED_APPS = [
     'rest_framework',
     "rest_framework_simplejwt",
     'drf_spectacular',
+    "django_filters",
     "rest_framework_simplejwt.token_blacklist",
     "django_celery_beat",
 
@@ -41,6 +42,7 @@ INSTALLED_APPS = [
     'apps.accounts',
     'apps.assets',
     'apps.clients',
+    'apps.core',
     'apps.organizations',
     'apps.notifications',
     'apps.reports',
@@ -154,6 +156,13 @@ REST_FRAMEWORK = {
         "rest_framework.permissions.IsAuthenticated",
     ),
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "DEFAULT_FILTER_BACKENDS": (
+        "django_filters.rest_framework.DjangoFilterBackend",
+        "rest_framework.filters.SearchFilter",
+        "rest_framework.filters.OrderingFilter",
+    ),
+    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
+    "PAGE_SIZE": 20,
 }
 
 # Spectacular
@@ -171,6 +180,46 @@ SPECTACULAR_SETTINGS = {
         "displayOperationId": False,
     },
 
+    "ENUM_NAME_OVERRIDES": {
+        "AssetStatusEnum": [
+            ("ACTIVE", "Active"),
+            ("INACTIVE", "Inactive"),
+            ("UNDER_MAINTENANCE", "Under Maintenance"),
+            ("RETIRED", "Retired"),
+        ],
+        "AttachmentFileTypeEnum": [
+            ("IMAGE", "Image"),
+            ("DOCUMENT", "Document"),
+            ("OTHER", "Other"),
+        ],
+        "OrganizationMembershipRoleEnum": [
+            ("OWNER", "Owner"),
+            ("ADMIN", "Admin"),
+            ("MANAGER", "Manager"),
+            ("TECHNICIAN", "Technician"),
+        ],
+        "TeamMemberAssignableRoleEnum": [
+            ("ADMIN", "Admin"),
+            ("MANAGER", "Manager"),
+            ("TECHNICIAN", "Technician"),
+        ],
+        "WorkOrderPriorityEnum": [
+            ("LOW", "Low"),
+            ("MEDIUM", "Medium"),
+            ("HIGH", "High"),
+            ("URGENT", "Urgent"),
+        ],
+        "WorkOrderStatusEnum": [
+            ("OPEN", "Open"),
+            ("ASSIGNED", "Assigned"),
+            ("IN_PROGRESS", "In Progress"),
+            ("ON_HOLD", "On Hold"),
+            ("COMPLETED", "Completed"),
+            ("CANCELLED", "Cancelled"),
+            ("OVERDUE", "Overdue"),
+        ],
+    },
+
     "TAGS": [
         {"name": "Auth", "description": "Registration, login, current user, and password APIs"},
         {"name": "Organizations", "description": "Organization profile and tenant context"},
@@ -179,6 +228,9 @@ SPECTACULAR_SETTINGS = {
         {"name": "Client Contacts", "description": "Client-side contacts and portal users"},
         {"name": "Assets", "description": "Client-owned assets and equipment"},
         {"name": "Work Orders", "description": "Service request and technician workflow"},
+        {"name": "Technician Portal", "description": "Technician-specific assigned work order APIs"},
+        {"name": "Client Portal", "description": "Client contact service request APIs"},
+        {"name": "Notifications", "description": "User notification APIs"},
         {"name": "Reports", "description": "Dashboard and reporting endpoints"},
     ],
 }

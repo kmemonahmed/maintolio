@@ -75,7 +75,20 @@ MANAGE_TEAM_ROLES = [
 
 class TeamMemberViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
+    queryset = OrganizationMembership.objects.none()
+    lookup_value_regex = "[0-9a-f-]{36}"
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
+    filterset_fields = ["role", "is_active"]
+    search_fields = [
+        "user__email",
+        "user__full_name",
+        "user__phone",
+    ]
+    ordering_fields = [
+        "created_at",
+        "updated_at",
+        "role",
+    ]
 
     def get_current_membership(self):
         if not hasattr(self, "_current_membership"):
@@ -84,6 +97,9 @@ class TeamMemberViewSet(viewsets.ModelViewSet):
         return self._current_membership
 
     def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return OrganizationMembership.objects.none()
+
         current_membership = self.get_current_membership()
 
         return (

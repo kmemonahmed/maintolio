@@ -1,5 +1,6 @@
 from django.contrib.auth.password_validation import validate_password
 from django.db import transaction
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.accounts.models import User
@@ -129,10 +130,12 @@ class MeSerializer(serializers.Serializer):
     organization_memberships = serializers.SerializerMethodField()
     client_contact_profile = serializers.SerializerMethodField()
 
-    def get_is_platform_admin(self, obj):
+    @extend_schema_field(serializers.BooleanField())
+    def get_is_platform_admin(self, obj) -> bool:
         return obj.is_staff or obj.is_superuser
 
-    def get_organization_memberships(self, obj):
+    @extend_schema_field(MembershipMeSerializer(many=True))
+    def get_organization_memberships(self, obj) -> list:
         memberships = (
             obj.organization_memberships
             .filter(is_active=True)
@@ -140,7 +143,8 @@ class MeSerializer(serializers.Serializer):
         )
         return MembershipMeSerializer(memberships, many=True).data
 
-    def get_client_contact_profile(self, obj):
+    @extend_schema_field(ClientContactMeSerializer(allow_null=True))
+    def get_client_contact_profile(self, obj) -> dict | None:
         try:
             profile = obj.client_contact_profile
         except ClientContact.DoesNotExist:
