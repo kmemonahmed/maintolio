@@ -10,8 +10,20 @@ from .serializers import NotificationSerializer
 
 class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [IsAuthenticated]
+    queryset = Notification.objects.none()
     serializer_class = NotificationSerializer
     http_method_names = ["get", "post", "head", "options"]
+    filterset_fields = ["is_read", "organization", "work_order"]
+    search_fields = [
+        "title",
+        "message",
+        "work_order__title",
+    ]
+    ordering_fields = [
+        "created_at",
+        "updated_at",
+        "is_read",
+    ]
 
     def get_queryset(self):
         queryset = (

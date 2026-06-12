@@ -38,7 +38,23 @@ MANAGE_WORK_ORDER_ROLES = [
 
 class WorkOrderViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
+    queryset = WorkOrder.objects.none()
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
+    filterset_fields = ["status", "priority", "client", "asset", "assigned_to"]
+    search_fields = [
+        "title",
+        "description",
+        "client__name",
+        "asset__name",
+        "asset__serial_number",
+    ]
+    ordering_fields = [
+        "created_at",
+        "updated_at",
+        "due_date",
+        "priority",
+        "status",
+    ]
 
     def get_current_membership(self):
         if not hasattr(self, "_current_membership"):
@@ -436,7 +452,23 @@ class TechnicianWorkOrderViewSet(
     viewsets.GenericViewSet,
 ):
     permission_classes = [IsAuthenticated]
+    queryset = WorkOrder.objects.none()
     http_method_names = ["get", "head", "options"]
+    filterset_fields = ["status", "priority", "client", "asset"]
+    search_fields = [
+        "title",
+        "description",
+        "client__name",
+        "asset__name",
+        "asset__serial_number",
+    ]
+    ordering_fields = [
+        "created_at",
+        "updated_at",
+        "due_date",
+        "priority",
+        "status",
+    ]
 
     def get_current_membership(self):
         if not hasattr(self, "_current_membership"):
@@ -508,7 +540,22 @@ class ClientPortalWorkOrderViewSet(
     viewsets.GenericViewSet,
 ):
     permission_classes = [IsAuthenticated]
+    queryset = WorkOrder.objects.none()
     http_method_names = ["get", "post", "head", "options"]
+    filterset_fields = ["status", "priority", "asset"]
+    search_fields = [
+        "title",
+        "description",
+        "asset__name",
+        "asset__serial_number",
+    ]
+    ordering_fields = [
+        "created_at",
+        "updated_at",
+        "due_date",
+        "priority",
+        "status",
+    ]
 
     def get_client_contact(self):
         if hasattr(self, "_client_contact"):

@@ -26,7 +26,20 @@ MANAGE_CLIENT_ROLES = [
 
 class ClientViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
+    queryset = Client.objects.none()
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
+    filterset_fields = ["is_active", "industry"]
+    search_fields = [
+        "name",
+        "email",
+        "phone",
+        "industry",
+    ]
+    ordering_fields = [
+        "created_at",
+        "updated_at",
+        "name",
+    ]
 
     def get_current_membership(self):
         if not hasattr(self, "_current_membership"):
@@ -145,7 +158,21 @@ class ClientViewSet(viewsets.ModelViewSet):
 
 class ClientContactViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
+    queryset = ClientContact.objects.none()
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
+    filterset_fields = ["client", "is_active", "can_login"]
+    search_fields = [
+        "full_name",
+        "email",
+        "phone",
+        "position",
+        "client__name",
+    ]
+    ordering_fields = [
+        "created_at",
+        "updated_at",
+        "full_name",
+    ]
 
     def get_current_membership(self):
         if not hasattr(self, "_current_membership"):

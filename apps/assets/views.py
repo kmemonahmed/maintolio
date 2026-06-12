@@ -22,7 +22,22 @@ MANAGE_ASSET_ROLES = [
 
 class AssetViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
+    queryset = Asset.objects.none()
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
+    filterset_fields = ["status", "client", "asset_type"]
+    search_fields = [
+        "name",
+        "asset_type",
+        "serial_number",
+        "location",
+        "client__name",
+    ]
+    ordering_fields = [
+        "created_at",
+        "updated_at",
+        "name",
+        "status",
+    ]
 
     def get_current_membership(self):
         if not hasattr(self, "_current_membership"):
