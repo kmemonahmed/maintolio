@@ -42,6 +42,7 @@ INSTALLED_APPS = [
     'apps.accounts',
     'apps.assets',
     'apps.clients',
+    'apps.core',
     'apps.organizations',
     'apps.notifications',
     'apps.reports',
