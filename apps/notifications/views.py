@@ -11,6 +11,7 @@ from .serializers import NotificationSerializer
 class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [IsAuthenticated]
     queryset = Notification.objects.none()
+    lookup_value_regex = "[0-9a-f-]{36}"
     serializer_class = NotificationSerializer
     http_method_names = ["get", "post", "head", "options"]
     filterset_fields = ["is_read", "organization", "work_order"]
@@ -26,6 +27,9 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
     ]
 
     def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return Notification.objects.none()
+
         queryset = (
             Notification.objects
             .filter(user=self.request.user)

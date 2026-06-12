@@ -27,6 +27,7 @@ MANAGE_CLIENT_ROLES = [
 class ClientViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     queryset = Client.objects.none()
+    lookup_value_regex = "[0-9a-f-]{36}"
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
     filterset_fields = ["is_active", "industry"]
     search_fields = [
@@ -48,6 +49,9 @@ class ClientViewSet(viewsets.ModelViewSet):
         return self._current_membership
 
     def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return Client.objects.none()
+
         current_membership = self.get_current_membership()
 
         return (
@@ -159,6 +163,7 @@ class ClientViewSet(viewsets.ModelViewSet):
 class ClientContactViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     queryset = ClientContact.objects.none()
+    lookup_value_regex = "[0-9a-f-]{36}"
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
     filterset_fields = ["client", "is_active", "can_login"]
     search_fields = [
@@ -181,6 +186,9 @@ class ClientContactViewSet(viewsets.ModelViewSet):
         return self._current_membership
 
     def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return ClientContact.objects.none()
+
         current_membership = self.get_current_membership()
 
         return (

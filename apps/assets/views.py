@@ -23,6 +23,7 @@ MANAGE_ASSET_ROLES = [
 class AssetViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     queryset = Asset.objects.none()
+    lookup_value_regex = "[0-9a-f-]{36}"
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
     filterset_fields = ["status", "client", "asset_type"]
     search_fields = [
@@ -46,6 +47,9 @@ class AssetViewSet(viewsets.ModelViewSet):
         return self._current_membership
 
     def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return Asset.objects.none()
+
         current_membership = self.get_current_membership()
 
         return (
@@ -156,6 +160,7 @@ class AssetViewSet(viewsets.ModelViewSet):
 
 class ClientAssetListView(ListAPIView):
     permission_classes = [IsAuthenticated]
+    queryset = Asset.objects.none()
     serializer_class = AssetSerializer
 
     def get_current_membership(self):
@@ -174,6 +179,9 @@ class ClientAssetListView(ListAPIView):
         return super().get(request, *args, **kwargs)
 
     def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return Asset.objects.none()
+
         current_membership = self.get_current_membership()
         client_id = self.kwargs["client_id"]
 

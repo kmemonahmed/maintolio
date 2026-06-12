@@ -180,6 +180,46 @@ SPECTACULAR_SETTINGS = {
         "displayOperationId": False,
     },
 
+    "ENUM_NAME_OVERRIDES": {
+        "AssetStatusEnum": [
+            ("ACTIVE", "Active"),
+            ("INACTIVE", "Inactive"),
+            ("UNDER_MAINTENANCE", "Under Maintenance"),
+            ("RETIRED", "Retired"),
+        ],
+        "AttachmentFileTypeEnum": [
+            ("IMAGE", "Image"),
+            ("DOCUMENT", "Document"),
+            ("OTHER", "Other"),
+        ],
+        "OrganizationMembershipRoleEnum": [
+            ("OWNER", "Owner"),
+            ("ADMIN", "Admin"),
+            ("MANAGER", "Manager"),
+            ("TECHNICIAN", "Technician"),
+        ],
+        "TeamMemberAssignableRoleEnum": [
+            ("ADMIN", "Admin"),
+            ("MANAGER", "Manager"),
+            ("TECHNICIAN", "Technician"),
+        ],
+        "WorkOrderPriorityEnum": [
+            ("LOW", "Low"),
+            ("MEDIUM", "Medium"),
+            ("HIGH", "High"),
+            ("URGENT", "Urgent"),
+        ],
+        "WorkOrderStatusEnum": [
+            ("OPEN", "Open"),
+            ("ASSIGNED", "Assigned"),
+            ("IN_PROGRESS", "In Progress"),
+            ("ON_HOLD", "On Hold"),
+            ("COMPLETED", "Completed"),
+            ("CANCELLED", "Cancelled"),
+            ("OVERDUE", "Overdue"),
+        ],
+    },
+
     "TAGS": [
         {"name": "Auth", "description": "Registration, login, current user, and password APIs"},
         {"name": "Organizations", "description": "Organization profile and tenant context"},
@@ -188,6 +228,9 @@ SPECTACULAR_SETTINGS = {
         {"name": "Client Contacts", "description": "Client-side contacts and portal users"},
         {"name": "Assets", "description": "Client-owned assets and equipment"},
         {"name": "Work Orders", "description": "Service request and technician workflow"},
+        {"name": "Technician Portal", "description": "Technician-specific assigned work order APIs"},
+        {"name": "Client Portal", "description": "Client contact service request APIs"},
+        {"name": "Notifications", "description": "User notification APIs"},
         {"name": "Reports", "description": "Dashboard and reporting endpoints"},
     ],
 }
