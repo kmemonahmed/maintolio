@@ -132,7 +132,7 @@ Current background workflows include overdue work order processing and daily wor
 
 ## Demo Credentials
 
-After running `seed_demo_data`, these accounts are available:
+After running `seed_demo_data`, these local demo-only accounts are available:
 
 ```text
 owner@techcare.test / Test@12345
