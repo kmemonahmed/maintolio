@@ -144,6 +144,27 @@ class WorkOrderWorkflowTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_work_order_detail_update_creates_audit_record(self):
+        self.client.force_authenticate(user=self.manager)
+
+        response = self.client.patch(
+            f"/api/work-orders/{self.work_order_a.id}/",
+            {
+                "description": "Updated technician instructions.",
+                "due_date": timezone.now().isoformat(),
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(
+            WorkOrderUpdate.objects.filter(
+                work_order=self.work_order_a,
+                message__contains='Work order description updated from "Investigate and repair." to "Updated technician instructions."',
+                is_internal=True,
+            ).exists()
+        )
+
     def test_cancel_work_order_creates_status_notifications(self):
         admin, _ = create_member_user(
             "wo-admin@example.com",
@@ -182,6 +203,14 @@ class WorkOrderWorkflowTests(APITestCase):
                 title="Work order status updated",
             ).exists()
         )
+        self.assertTrue(
+            WorkOrderUpdate.objects.filter(
+                work_order=self.work_order_a,
+                old_status=WorkOrder.Status.ASSIGNED,
+                new_status=WorkOrder.Status.CANCELLED,
+                message="Work order cancelled.",
+            ).exists()
+        )
 
     def test_manager_can_assign_technician(self):
         self.client.force_authenticate(user=self.manager)
@@ -196,6 +225,20 @@ class WorkOrderWorkflowTests(APITestCase):
         self.work_order_a.refresh_from_db()
         self.assertEqual(self.work_order_a.assigned_to_id, self.tech_membership.id)
         self.assertEqual(self.work_order_a.status, WorkOrder.Status.ASSIGNED)
+
+    def test_cannot_mark_open_work_order_assigned_without_technician(self):
+        self.client.force_authenticate(user=self.manager)
+
+        response = self.client.post(
+            f"/api/work-orders/{self.work_order_a.id}/change-status/",
+            {"status": WorkOrder.Status.ASSIGNED},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.work_order_a.refresh_from_db()
+        self.assertEqual(self.work_order_a.status, WorkOrder.Status.OPEN)
+        self.assertIsNone(self.work_order_a.assigned_to)
 
     def test_assigned_technician_can_change_status(self):
         self.work_order_a.assigned_to = self.tech_membership
@@ -317,6 +360,14 @@ class WorkOrderWorkflowTests(APITestCase):
             format="multipart",
         )
         self.assertEqual(upload_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(len(upload_response.data), 1)
+        self.assertTrue(
+            WorkOrderUpdate.objects.filter(
+                work_order=self.work_order_a,
+                message="Uploaded 1 attachment.",
+                is_internal=True,
+            ).exists()
+        )
 
         self.client.post(
             f"/api/work-orders/{self.work_order_a.id}/add-update/",
@@ -333,6 +384,47 @@ class WorkOrderWorkflowTests(APITestCase):
         self.assertEqual(attachments_response.status_code, status.HTTP_200_OK)
         self.assertGreaterEqual(len(updates_response.data), 1)
         self.assertEqual(len(attachments_response.data), 1)
+
+    def test_upload_multiple_attachments_in_one_request(self):
+        self.client.force_authenticate(user=self.manager)
+
+        response = self.client.post(
+            f"/api/work-orders/{self.work_order_a.id}/upload-attachment/",
+            {
+                "files": [
+                    SimpleUploadedFile(
+                        "photo-1.txt",
+                        b"first attachment",
+                        content_type="text/plain",
+                    ),
+                    SimpleUploadedFile(
+                        "photo-2.txt",
+                        b"second attachment",
+                        content_type="text/plain",
+                    ),
+                ],
+                "file_type": Attachment.FileType.DOCUMENT,
+                "description": "Batch upload",
+            },
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(len(response.data), 2)
+        self.assertTrue(
+            WorkOrderUpdate.objects.filter(
+                work_order=self.work_order_a,
+                message="Uploaded 2 attachments.",
+                is_internal=True,
+            ).exists()
+        )
+        self.assertEqual(
+            Attachment.objects.filter(
+                work_order=self.work_order_a,
+                description="Batch upload",
+            ).count(),
+            2,
+        )
 
     def test_cannot_upload_attachment_to_cancelled_work_order(self):
         self.work_order_a.status = WorkOrder.Status.CANCELLED

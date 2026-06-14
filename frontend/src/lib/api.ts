@@ -174,7 +174,7 @@ export const api = {
   listWorkOrderUpdates: (id: string) => apiRequest<WorkOrderUpdate[]>(`/api/work-orders/${id}/updates/`),
   listWorkOrderAttachments: (id: string) => apiRequest<Attachment[]>(`/api/work-orders/${id}/attachments/`),
   uploadWorkOrderAttachment: (id: string, body: FormData) =>
-    apiRequest<Attachment>(`/api/work-orders/${id}/upload-attachment/`, { method: "POST", body, isFormData: true }),
+    apiRequest<Attachment[]>(`/api/work-orders/${id}/upload-attachment/`, { method: "POST", body, isFormData: true }),
 
   listTechnicianWorkOrders: (params?: Record<string, unknown>) =>
     apiRequest<PaginatedResponse<WorkOrderListItem>>(buildUrl("/api/technician/work-orders/", params)),
@@ -190,7 +190,7 @@ export const api = {
   listClientRequestUpdates: (id: string) => apiRequest<WorkOrderUpdate[]>(`/api/client-portal/requests/${id}/updates/`),
   listClientRequestAttachments: (id: string) => apiRequest<Attachment[]>(`/api/client-portal/requests/${id}/attachments/`),
   uploadClientRequestAttachment: (id: string, body: FormData) =>
-    apiRequest<Attachment>(`/api/client-portal/requests/${id}/upload-attachment/`, { method: "POST", body, isFormData: true }),
+    apiRequest<Attachment[]>(`/api/client-portal/requests/${id}/upload-attachment/`, { method: "POST", body, isFormData: true }),
 
   listNotifications: (params?: Record<string, unknown>) =>
     apiRequest<PaginatedResponse<NotificationItem>>(buildUrl("/api/notifications/", params)),

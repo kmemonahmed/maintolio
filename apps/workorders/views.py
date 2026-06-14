@@ -1,4 +1,6 @@
 from django.db.models import Case, F, IntegerField, Value, When
+from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from drf_spectacular.utils import extend_schema
 from rest_framework import status, viewsets, mixins
 from rest_framework.exceptions import PermissionDenied
@@ -10,7 +12,7 @@ from apps.organizations.models import OrganizationMembership
 from apps.organizations.utils import get_current_membership
 from apps.notifications.services import notify_work_order_status_changed
 
-from .models import WorkOrder
+from .models import WorkOrder, WorkOrderUpdate
 
 from .serializers import (
     AttachmentSerializer,
@@ -36,6 +38,109 @@ MANAGE_WORK_ORDER_ROLES = [
     OrganizationMembership.Role.ADMIN,
     OrganizationMembership.Role.MANAGER,
 ]
+
+def _audit_value(value):
+    if hasattr(value, "pk"):
+        return value.pk
+
+    return value
+
+
+def _audit_values_equal(field, old_value, new_value):
+    if field != "due_date":
+        return old_value == new_value
+
+    if old_value is None or new_value is None:
+        return old_value is None and new_value is None
+
+    if isinstance(new_value, str):
+        parsed_value = parse_datetime(new_value)
+        if parsed_value is not None:
+            new_value = parsed_value
+
+    return old_value == new_value
+
+
+def _display_audit_value(field, value):
+    if value in [None, ""]:
+        return "empty"
+
+    if field == "due_date":
+        if isinstance(value, str):
+            value = parse_datetime(value) or value
+
+        if hasattr(value, "astimezone"):
+            value = timezone.localtime(value)
+            return value.strftime("%b %-d, %Y at %-I:%M %p")
+
+    if field == "priority":
+        return str(value).replace("_", " ").title()
+
+    if field == "client":
+        return getattr(value, "name", str(value))
+
+    if field == "asset":
+        return getattr(value, "name", str(value))
+
+    if field == "requested_by_contact":
+        return getattr(value, "full_name", str(value))
+
+    if field == "description":
+        text = str(value).strip()
+        return text if len(text) <= 90 else f"{text[:87]}..."
+
+    return str(value)
+
+
+def _work_order_update_audit_message(changes):
+    messages = []
+
+    for field, old_value, new_value in changes:
+        old_display = _display_audit_value(field, old_value)
+        new_display = _display_audit_value(field, new_value)
+
+        if field == "description":
+            messages.append(
+                f'Work order description updated from "{old_display}" to "{new_display}".'
+            )
+        elif field == "due_date":
+            messages.append(
+                f'Work order due date changed from {old_display} to {new_display}.'
+            )
+        elif field == "priority":
+            messages.append(
+                f"Work order priority changed from {old_display} to {new_display}."
+            )
+        elif field == "title":
+            messages.append(
+                f'Work order title changed from "{old_display}" to "{new_display}".'
+            )
+        elif field == "client":
+            messages.append(
+                f"Work order client changed from {old_display} to {new_display}."
+            )
+        elif field == "asset":
+            messages.append(
+                f"Work order asset changed from {old_display} to {new_display}."
+            )
+        elif field == "requested_by_contact":
+            messages.append(
+                f"Requested contact changed from {old_display} to {new_display}."
+            )
+        else:
+            label = field.replace("_", " ")
+            messages.append(
+                f"Work order {label} changed from {old_display} to {new_display}."
+            )
+
+    return " ".join(messages)
+
+
+def _attachment_audit_message(attachments):
+    count = len(attachments)
+    noun = "attachment" if count == 1 else "attachments"
+
+    return f"Uploaded {count} {noun}."
 
 
 class WorkOrderViewSet(viewsets.ModelViewSet):
@@ -187,15 +292,47 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
         self.require_work_order_manage_permission()
 
         work_order = self.get_object()
+        old_status = work_order.status
 
         serializer = self.get_serializer(
             work_order,
             data=request.data,
             partial=True,
         )
+        original_values = {
+            field: _audit_value(getattr(work_order, field))
+            for field in serializer.fields
+            if field in request.data
+        }
+        original_display_values = {
+            field: getattr(work_order, field)
+            for field in serializer.fields
+            if field in request.data
+        }
         serializer.is_valid(raise_exception=True)
 
         work_order = serializer.save()
+        changes = []
+
+        for field, old_value in original_values.items():
+            if not _audit_values_equal(field, old_value, _audit_value(getattr(work_order, field))):
+                changes.append(
+                    (
+                        field,
+                        original_display_values[field],
+                        getattr(work_order, field),
+                    )
+                )
+
+        if changes:
+            WorkOrderUpdate.objects.create(
+                work_order=work_order,
+                user=request.user,
+                message=_work_order_update_audit_message(changes),
+                old_status=old_status,
+                new_status=work_order.status,
+                is_internal=True,
+            )
 
         return Response(
             WorkOrderSerializer(work_order).data,
@@ -221,6 +358,15 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
         old_status = work_order.status
         work_order.status = WorkOrder.Status.CANCELLED
         work_order.save(update_fields=["status", "cancelled_at", "completed_at", "updated_at"])
+
+        WorkOrderUpdate.objects.create(
+            work_order=work_order,
+            user=request.user,
+            message="Work order cancelled.",
+            old_status=old_status,
+            new_status=WorkOrder.Status.CANCELLED,
+            is_internal=True,
+        )
 
         notify_work_order_status_changed(
             work_order,
@@ -384,9 +530,9 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
     @extend_schema(
         tags=["Work Orders"],
         summary="Upload work order attachment",
-        description="Uploads a file attachment to a work order.",
+        description="Uploads one or more file attachments to a work order.",
         request=WorkOrderAttachmentUploadSerializer,
-        responses=AttachmentSerializer,
+        responses=AttachmentSerializer(many=True),
     )
     @action(detail=True, methods=["post"], url_path="upload-attachment")
     def upload_attachment(self, request, *args, **kwargs):
@@ -404,9 +550,18 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
         )
         serializer.is_valid(raise_exception=True)
 
-        attachment = serializer.save()
+        attachments = serializer.save()
 
-        response_serializer = AttachmentSerializer(attachment)
+        WorkOrderUpdate.objects.create(
+            work_order=work_order,
+            user=request.user,
+            message=_attachment_audit_message(attachments),
+            old_status=work_order.status,
+            new_status=work_order.status,
+            is_internal=True,
+        )
+
+        response_serializer = AttachmentSerializer(attachments, many=True)
 
         return Response(
             response_serializer.data,
@@ -761,9 +916,9 @@ class ClientPortalWorkOrderViewSet(
     @extend_schema(
         tags=["Client Portal"],
         summary="Upload attachment to service request",
-        description="Uploads a client-side attachment to a service request.",
+        description="Uploads one or more client-side attachments to a service request.",
         request=ClientPortalAttachmentUploadSerializer,
-        responses=AttachmentSerializer,
+        responses=AttachmentSerializer(many=True),
     )
     @action(detail=True, methods=["post"], url_path="upload-attachment")
     def upload_attachment(self, request, *args, **kwargs):
@@ -779,10 +934,20 @@ class ClientPortalWorkOrderViewSet(
         )
         serializer.is_valid(raise_exception=True)
 
-        attachment = serializer.save()
+        attachments = serializer.save()
+
+        WorkOrderUpdate.objects.create(
+            work_order=work_order,
+            user=request.user,
+            message=_attachment_audit_message(attachments),
+            old_status=work_order.status,
+            new_status=work_order.status,
+            is_internal=False,
+        )
 
         response_serializer = AttachmentSerializer(
-            attachment,
+            attachments,
+            many=True,
             context={"request": request},
         )
 

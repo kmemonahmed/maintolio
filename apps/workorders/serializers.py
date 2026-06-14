@@ -420,6 +420,12 @@ class WorkOrderChangeStatusSerializer(serializers.Serializer):
                     {"message": "Enter a reason before reopening this work order."}
                 )
 
+        if old_status == WorkOrder.Status.OPEN and new_status == WorkOrder.Status.ASSIGNED:
+            if not self.instance.assigned_to_id:
+                raise serializers.ValidationError(
+                    {"status": "Assign a technician before marking this work order as assigned."}
+                )
+
         return attrs
 
     def update(self, instance, validated_data):
@@ -528,7 +534,12 @@ class AttachmentSerializer(serializers.ModelSerializer):
 
 
 class WorkOrderAttachmentUploadSerializer(serializers.Serializer):
-    file = serializers.FileField()
+    file = serializers.FileField(required=False)
+    files = serializers.ListField(
+        child=serializers.FileField(),
+        required=False,
+        write_only=True,
+    )
     file_type = serializers.ChoiceField(
         choices=Attachment.FileType.choices,
         default=Attachment.FileType.OTHER,
@@ -539,19 +550,38 @@ class WorkOrderAttachmentUploadSerializer(serializers.Serializer):
         max_length=255,
     )
 
+    def validate(self, attrs):
+        request = self.context["request"]
+        files = request.FILES.getlist("files") or request.FILES.getlist("file")
+
+        if not files and attrs.get("file"):
+            files = [attrs["file"]]
+
+        if not files:
+            raise serializers.ValidationError(
+                {"files": "Select at least one attachment."}
+            )
+
+        attrs["files"] = files
+
+        return attrs
+
     def create(self, validated_data):
         work_order = self.context["work_order"]
         request = self.context["request"]
+        file_type = validated_data.get("file_type", Attachment.FileType.OTHER)
+        description = validated_data.get("description", "")
 
-        attachment = Attachment.objects.create(
-            work_order=work_order,
-            uploaded_by=request.user,
-            file=validated_data["file"],
-            file_type=validated_data.get("file_type", Attachment.FileType.OTHER),
-            description=validated_data.get("description", ""),
-        )
-
-        return attachment
+        return [
+            Attachment.objects.create(
+                work_order=work_order,
+                uploaded_by=request.user,
+                file=file,
+                file_type=file_type,
+                description=description,
+            )
+            for file in validated_data["files"]
+        ]
 
 
 class ClientPortalWorkOrderCreateSerializer(serializers.ModelSerializer):
@@ -642,7 +672,12 @@ class ClientPortalAddCommentSerializer(serializers.Serializer):
 
 
 class ClientPortalAttachmentUploadSerializer(serializers.Serializer):
-    file = serializers.FileField()
+    file = serializers.FileField(required=False)
+    files = serializers.ListField(
+        child=serializers.FileField(),
+        required=False,
+        write_only=True,
+    )
     file_type = serializers.ChoiceField(
         choices=Attachment.FileType.choices,
         default=Attachment.FileType.OTHER,
@@ -653,16 +688,35 @@ class ClientPortalAttachmentUploadSerializer(serializers.Serializer):
         max_length=255,
     )
 
+    def validate(self, attrs):
+        request = self.context["request"]
+        files = request.FILES.getlist("files") or request.FILES.getlist("file")
+
+        if not files and attrs.get("file"):
+            files = [attrs["file"]]
+
+        if not files:
+            raise serializers.ValidationError(
+                {"files": "Select at least one attachment."}
+            )
+
+        attrs["files"] = files
+
+        return attrs
+
     def create(self, validated_data):
         work_order = self.context["work_order"]
         request = self.context["request"]
+        file_type = validated_data.get("file_type", Attachment.FileType.OTHER)
+        description = validated_data.get("description", "")
 
-        attachment = Attachment.objects.create(
-            work_order=work_order,
-            uploaded_by=request.user,
-            file=validated_data["file"],
-            file_type=validated_data.get("file_type", Attachment.FileType.OTHER),
-            description=validated_data.get("description", ""),
-        )
-
-        return attachment
+        return [
+            Attachment.objects.create(
+                work_order=work_order,
+                uploaded_by=request.user,
+                file=file,
+                file_type=file_type,
+                description=description,
+            )
+            for file in validated_data["files"]
+        ]

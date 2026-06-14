@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Paperclip, Send, Upload } from "lucide-react";
+import { ArrowLeft, Edit, Paperclip, Send, Upload } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -30,7 +30,11 @@ export function WorkOrderDetailScreen({ id, portal = "company" }: { id: string; 
   const [status, setStatus] = useState("");
   const [assignee, setAssignee] = useState("");
   const [reopenCause, setReopenCause] = useState("");
-  const [file, setFile] = useState<File | null>(null);
+  const [editingDetails, setEditingDetails] = useState(false);
+  const [descriptionDraft, setDescriptionDraft] = useState("");
+  const [dueDateDraft, setDueDateDraft] = useState("");
+  const [files, setFiles] = useState<File[]>([]);
+  const [fileInputKey, setFileInputKey] = useState(0);
 
   const baseBack = portal === "client" ? "/client/requests" : portal === "technician" ? "/tech/work-orders" : "/app/work-orders";
   const detailQuery = useQuery({
@@ -103,18 +107,29 @@ export function WorkOrderDetailScreen({ id, portal = "company" }: { id: string; 
     onError: (error) => toast.error(error instanceof Error ? error.message : "Could not reopen work order"),
   });
 
+  const updateDetails = useMutation({
+    mutationFn: (body: Record<string, unknown>) => api.updateWorkOrder(id, body),
+    onSuccess: () => {
+      setEditingDetails(false);
+      invalidate();
+      toast.success("Work order details updated");
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : "Could not update work order details"),
+  });
+
   const upload = useMutation({
     mutationFn: () => {
-      if (!file) throw new Error("Choose a file first.");
+      if (!files.length) throw new Error("Choose at least one file first.");
       const formData = new FormData();
-      formData.append("file", file);
-      formData.append("file_type", file.type.startsWith("image/") ? "IMAGE" : "DOCUMENT");
+      files.forEach((selectedFile) => formData.append("files", selectedFile));
+      formData.append("file_type", fileTypeFor(files));
       return portal === "client" ? api.uploadClientRequestAttachment(id, formData) : api.uploadWorkOrderAttachment(id, formData);
     },
     onSuccess: () => {
-      setFile(null);
+      setFiles([]);
+      setFileInputKey((value) => value + 1);
       invalidate();
-      toast.success("Attachment uploaded");
+      toast.success(files.length > 1 ? "Attachments uploaded" : "Attachment uploaded");
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : "Upload failed"),
   });
@@ -125,10 +140,23 @@ export function WorkOrderDetailScreen({ id, portal = "company" }: { id: string; 
   const currentAssigneeId = workOrder.assigned_to?.id ?? "";
   const selectedAssignee = assignee || currentAssigneeId;
   const currentAssigneeName = workOrder.assigned_to?.user.full_name ?? "Unassigned";
-  const availableStatuses = statusTransitions[workOrder.status] ?? [];
-  const selectedStatus = status || availableStatuses[0] || "";
+  const availableStatuses = (statusTransitions[workOrder.status] ?? []).filter(
+    (nextStatus) => !(nextStatus === "ASSIGNED" && !currentAssigneeId),
+  );
+  const selectedStatus = availableStatuses.includes(status) ? status : "";
   const isCancelled = workOrder.status === "CANCELLED";
   const isClosed = isCancelled || workOrder.status === "COMPLETED";
+  const canEditDetails = portal === "company" && !isClosed;
+  const detailsPatch = buildDetailsPatch(workOrder.description, workOrder.due_date, descriptionDraft, dueDateDraft);
+  const hasDetailsChanges = Object.keys(detailsPatch).length > 0;
+
+  function startDetailsEdit() {
+    if (!workOrder) return;
+
+    setDescriptionDraft(workOrder.description);
+    setDueDateDraft(datetimeLocalValue(workOrder.due_date));
+    setEditingDetails(true);
+  }
 
   return (
     <div className="space-y-5">
@@ -146,14 +174,55 @@ export function WorkOrderDetailScreen({ id, portal = "company" }: { id: string; 
                   <h2 className="text-2xl font-semibold tracking-tight">{workOrder.title}</h2>
                   <p className="mt-1 text-sm text-muted-foreground">{workOrder.client?.name ?? "Client request"}</p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  {canEditDetails && !editingDetails ? (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 rounded-md border border-border bg-white text-muted-foreground shadow-none hover:border-[#b8c8ce] hover:bg-[#f7fafb] hover:text-foreground"
+                      onClick={startDetailsEdit}
+                      aria-label="Edit work order details"
+                      title="Edit details"
+                    >
+                      <Edit className="h-3.5 w-3.5" />
+                    </Button>
+                  ) : null}
                   <Badge value={workOrder.priority} />
                   <Badge value={workOrder.status} />
                 </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-5">
-              <p className="whitespace-pre-wrap text-sm leading-6">{workOrder.description}</p>
+              {editingDetails ? (
+                <div className="space-y-3">
+                  <div className="space-y-1.5">
+                    <Label>Description</Label>
+                    <Textarea value={descriptionDraft} onChange={(event) => setDescriptionDraft(event.target.value)} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Due date</Label>
+                    <Input type="datetime-local" value={dueDateDraft} onChange={(event) => setDueDateDraft(event.target.value)} />
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => {
+                        setEditingDetails(false);
+                        setDescriptionDraft("");
+                        setDueDateDraft("");
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                    <Button disabled={!descriptionDraft.trim() || !hasDetailsChanges || updateDetails.isPending} onClick={() => updateDetails.mutate(detailsPatch)}>
+                      Save details
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <p className="whitespace-pre-wrap text-sm leading-6">{workOrder.description}</p>
+              )}
               <div className="grid gap-3 text-sm md:grid-cols-3">
                 <Info label="Asset" value={workOrder.asset?.name ?? "None"} />
                 <Info label="Assigned to" value={workOrder.assigned_to?.user.full_name ?? "Unassigned"} />
@@ -198,7 +267,7 @@ export function WorkOrderDetailScreen({ id, portal = "company" }: { id: string; 
                 </Button>
               </form>
 
-              <div className="space-y-3">
+              <div className="max-h-[30rem] space-y-3 overflow-y-auto pr-2">
                 {(updatesQuery.data ?? []).map((update) => (
                   <div key={update.id} className="rounded-md border border-border p-3">
                     <div className="mb-2 flex items-center justify-between gap-3 text-xs text-muted-foreground">
@@ -302,10 +371,11 @@ export function WorkOrderDetailScreen({ id, portal = "company" }: { id: string; 
               {!isClosed ? (
                 <>
                   <Label>Upload file</Label>
-                  <Input type="file" onChange={(event) => setFile(event.target.files?.[0] ?? null)} />
-                  <Button className="w-full" variant="secondary" onClick={() => upload.mutate()} disabled={!file || upload.isPending}>
+                  <Input key={fileInputKey} type="file" multiple onChange={(event) => setFiles(Array.from(event.target.files ?? []))} />
+                  {files.length ? <p className="text-xs text-muted-foreground">{files.length} selected</p> : null}
+                  <Button className="w-full" variant="secondary" onClick={() => upload.mutate()} disabled={!files.length || upload.isPending}>
                     <Upload className="h-4 w-4" />
-                    Upload
+                    {files.length > 1 ? "Upload attachments" : "Upload attachment"}
                   </Button>
                 </>
               ) : null}
@@ -338,4 +408,34 @@ function Info({ label, value }: { label: string; value: string }) {
       <p className="mt-1 font-medium">{value}</p>
     </div>
   );
+}
+
+function fileTypeFor(files: File[]) {
+  if (files.every((file) => file.type.startsWith("image/"))) return "IMAGE";
+  if (files.every((file) => !file.type.startsWith("image/"))) return "DOCUMENT";
+  return "OTHER";
+}
+
+function datetimeLocalValue(value?: string | null) {
+  if (!value) return "";
+
+  const date = new Date(value);
+  const pad = (part: number) => String(part).padStart(2, "0");
+
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function buildDetailsPatch(currentDescription: string, currentDueDate: string | null, descriptionDraft: string, dueDateDraft: string) {
+  const patch: Record<string, unknown> = {};
+  const normalizedDescription = descriptionDraft.trim();
+
+  if (normalizedDescription !== currentDescription) {
+    patch.description = normalizedDescription;
+  }
+
+  if (dueDateDraft !== datetimeLocalValue(currentDueDate)) {
+    patch.due_date = dueDateDraft ? new Date(dueDateDraft).toISOString() : null;
+  }
+
+  return patch;
 }

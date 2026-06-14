@@ -363,12 +363,7 @@ export function WorkOrdersPage({ portal = "company" }: { portal?: "company" | "t
     { header: "Status", value: (row: WorkOrderListItem) => <Badge value={row.status} /> },
     {
       header: "Due",
-      value: (row: WorkOrderListItem) => (
-        <div className="flex flex-wrap items-center gap-2">
-          <span>{row.due_date ? formatDate(row.due_date) : "Not set"}</span>
-          {row.status === "OVERDUE" || row.is_overdue ? <Badge value="Overdue" /> : null}
-        </div>
-      ),
+      value: (row: WorkOrderListItem) => (row.due_date ? formatDate(row.due_date) : "Not set"),
     },
   ];
 
