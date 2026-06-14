@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowRight, CheckCircle2, LockKeyhole, ShieldCheck } from "lucide-react";
+import { ArrowRight, CheckCircle2, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useSyncExternalStore } from "react";
@@ -185,7 +185,7 @@ function AuthFrame({ title, subtitle, children }: { title: string; subtitle: str
         <div className="relative flex">
           <div className="flex h-28 w-[34rem] max-w-full items-center overflow-hidden rounded-xl bg-white shadow-xl shadow-cyan-950/20 ring-1 ring-white/10">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/maintolio-logo.svg" alt="Maintolio" className="h-full w-full scale-110 object-contain object-center" />
+            <img src="/maintolio-logo.svg" alt="Maintolio" className="h-full w-full scale-[1.28] object-contain object-center" />
           </div>
         </div>
         <div className="relative">
@@ -229,10 +229,6 @@ function AuthFrame({ title, subtitle, children }: { title: string; subtitle: str
               <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
             </div>
             {children}
-            <div className="mt-6 flex items-center gap-2 rounded-md border border-[#d8e8eb] bg-[#f7fbfc] px-3 py-2 text-xs text-muted-foreground">
-              <LockKeyhole className="h-3.5 w-3.5 text-primary" />
-              Your session is protected with token-based authentication.
-            </div>
           </CardContent>
         </Card>
       </section>
