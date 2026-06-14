@@ -1,4 +1,5 @@
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -12,6 +13,7 @@ from apps.core.test_helpers import (
     create_work_order,
     paginated_results,
 )
+from apps.notifications.models import Notification
 from apps.organizations.models import OrganizationMembership
 from apps.workorders.models import Attachment, WorkOrder, WorkOrderUpdate
 
@@ -142,6 +144,45 @@ class WorkOrderWorkflowTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_cancel_work_order_creates_status_notifications(self):
+        admin, _ = create_member_user(
+            "wo-admin@example.com",
+            self.org_a,
+            OrganizationMembership.Role.ADMIN,
+            "WO Admin",
+        )
+        self.work_order_a.assigned_to = self.tech_membership
+        self.work_order_a.status = WorkOrder.Status.ASSIGNED
+        self.work_order_a.save(update_fields=["assigned_to", "status", "updated_at"])
+        self.client.force_authenticate(user=self.manager)
+
+        response = self.client.delete(f"/api/work-orders/{self.work_order_a.id}/")
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.work_order_a.refresh_from_db()
+        self.assertEqual(self.work_order_a.status, WorkOrder.Status.CANCELLED)
+        self.assertTrue(
+            Notification.objects.filter(
+                user=self.tech,
+                work_order=self.work_order_a,
+                title="Work order status updated",
+            ).exists()
+        )
+        self.assertTrue(
+            Notification.objects.filter(
+                user=admin,
+                work_order=self.work_order_a,
+                title="Work order status updated",
+            ).exists()
+        )
+        self.assertFalse(
+            Notification.objects.filter(
+                user=self.manager,
+                work_order=self.work_order_a,
+                title="Work order status updated",
+            ).exists()
+        )
+
     def test_manager_can_assign_technician(self):
         self.client.force_authenticate(user=self.manager)
 
@@ -181,6 +222,62 @@ class WorkOrderWorkflowTests(APITestCase):
         response = self.client.post(
             f"/api/work-orders/{self.work_order_a.id}/change-status/",
             {"status": WorkOrder.Status.IN_PROGRESS},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_manager_can_reopen_cancelled_work_order_with_cause(self):
+        self.work_order_a.assigned_to = self.tech_membership
+        self.work_order_a.status = WorkOrder.Status.CANCELLED
+        self.work_order_a.save(update_fields=["assigned_to", "status", "updated_at"])
+        self.client.force_authenticate(user=self.manager)
+
+        response = self.client.post(
+            f"/api/work-orders/{self.work_order_a.id}/change-status/",
+            {
+                "status": WorkOrder.Status.OPEN,
+                "message": "Client confirmed the cancellation was accidental.",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.work_order_a.refresh_from_db()
+        self.assertEqual(self.work_order_a.status, WorkOrder.Status.OPEN)
+        self.assertIsNone(self.work_order_a.assigned_to)
+        self.assertIsNone(self.work_order_a.cancelled_at)
+        self.assertTrue(
+            WorkOrderUpdate.objects.filter(
+                work_order=self.work_order_a,
+                old_status=WorkOrder.Status.CANCELLED,
+                new_status=WorkOrder.Status.OPEN,
+                message="Client confirmed the cancellation was accidental.",
+            ).exists()
+        )
+
+    def test_reopen_cancelled_work_order_requires_cause(self):
+        self.work_order_a.status = WorkOrder.Status.CANCELLED
+        self.work_order_a.save(update_fields=["status", "updated_at"])
+        self.client.force_authenticate(user=self.manager)
+
+        response = self.client.post(
+            f"/api/work-orders/{self.work_order_a.id}/change-status/",
+            {"status": WorkOrder.Status.OPEN, "message": ""},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_technician_cannot_reopen_cancelled_work_order(self):
+        self.work_order_a.assigned_to = self.tech_membership
+        self.work_order_a.status = WorkOrder.Status.CANCELLED
+        self.work_order_a.save(update_fields=["assigned_to", "status", "updated_at"])
+        self.client.force_authenticate(user=self.tech)
+
+        response = self.client.post(
+            f"/api/work-orders/{self.work_order_a.id}/change-status/",
+            {"status": WorkOrder.Status.OPEN, "message": "Need to reopen."},
             format="json",
         )
 
@@ -236,6 +333,26 @@ class WorkOrderWorkflowTests(APITestCase):
         self.assertEqual(attachments_response.status_code, status.HTTP_200_OK)
         self.assertGreaterEqual(len(updates_response.data), 1)
         self.assertEqual(len(attachments_response.data), 1)
+
+    def test_cannot_upload_attachment_to_cancelled_work_order(self):
+        self.work_order_a.status = WorkOrder.Status.CANCELLED
+        self.work_order_a.save(update_fields=["status", "updated_at"])
+        self.client.force_authenticate(user=self.manager)
+
+        response = self.client.post(
+            f"/api/work-orders/{self.work_order_a.id}/upload-attachment/",
+            {
+                "file": SimpleUploadedFile(
+                    "cancelled-note.txt",
+                    b"attachment body",
+                    content_type="text/plain",
+                ),
+                "file_type": Attachment.FileType.DOCUMENT,
+            },
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_work_order_filter_by_status_and_pagination_shape(self):
         create_work_order(
@@ -298,6 +415,51 @@ class TechnicianPortalTests(APITestCase):
         ids = {item["id"] for item in paginated_results(response)}
         self.assertIn(str(self.assigned_work_order.id), ids)
         self.assertNotIn(str(self.other_work_order.id), ids)
+
+    def test_technician_default_list_prioritizes_active_overdue_work(self):
+        overdue_work_order = create_work_order(
+            self.organization,
+            self.client_record,
+            title="Overdue assigned work",
+            assigned_to=self.tech_membership,
+            status=WorkOrder.Status.OVERDUE,
+            due_date=timezone.now() - timezone.timedelta(days=1),
+        )
+        completed_work_order = create_work_order(
+            self.organization,
+            self.client_record,
+            title="Completed assigned work",
+            assigned_to=self.tech_membership,
+            status=WorkOrder.Status.COMPLETED,
+        )
+        self.client.force_authenticate(user=self.tech)
+
+        response = self.client.get("/api/technician/work-orders/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        results = paginated_results(response)
+        ids = [item["id"] for item in results]
+        self.assertEqual(ids[0], str(overdue_work_order.id))
+        self.assertIn(str(self.assigned_work_order.id), ids)
+        self.assertNotIn(str(completed_work_order.id), ids)
+
+    def test_technician_can_filter_completed_history(self):
+        completed_work_order = create_work_order(
+            self.organization,
+            self.client_record,
+            title="Completed assigned work",
+            assigned_to=self.tech_membership,
+            status=WorkOrder.Status.COMPLETED,
+        )
+        self.client.force_authenticate(user=self.tech)
+
+        response = self.client.get(
+            f"/api/technician/work-orders/?status={WorkOrder.Status.COMPLETED}"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        ids = {item["id"] for item in paginated_results(response)}
+        self.assertIn(str(completed_work_order.id), ids)
 
     def test_technician_cannot_retrieve_another_technicians_work_order(self):
         self.client.force_authenticate(user=self.tech)

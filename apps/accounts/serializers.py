@@ -1,11 +1,25 @@
 from django.contrib.auth.password_validation import validate_password
 from django.db import transaction
 from drf_spectacular.utils import extend_schema_field
+from rest_framework.exceptions import AuthenticationFailed
 from rest_framework import serializers
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 from apps.accounts.models import User
 from apps.organizations.models import Organization, OrganizationMembership
 from apps.clients.models import ClientContact
+
+
+class MaintolioTokenObtainPairSerializer(TokenObtainPairSerializer):
+    def validate(self, attrs):
+        data = super().validate(attrs)
+
+        if self.user.is_staff or self.user.is_superuser:
+            raise AuthenticationFailed(
+                "You are not authorized to access this portal."
+            )
+
+        return data
 
 
 

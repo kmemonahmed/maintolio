@@ -49,6 +49,23 @@ class AuthAPITests(APITestCase):
         self.assertIn("access", response.data)
         self.assertIn("refresh", response.data)
 
+    def test_platform_admin_cannot_login_to_workspace(self):
+        get_user_model().objects.create_superuser(
+            email="platform-admin@example.com",
+            password=TEST_PASSWORD,
+            full_name="Platform Admin",
+        )
+
+        response = self.client.post(
+            reverse("login"),
+            {"email": "platform-admin@example.com", "password": TEST_PASSWORD},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertNotIn("access", response.data)
+        self.assertEqual(str(response.data["detail"]), "You are not authorized to access this portal.")
+
     def test_me_endpoint_returns_user_profile(self):
         user, _ = create_member_user(
             email="me@example.com",

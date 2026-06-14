@@ -9,10 +9,13 @@ from .serializers import (
     ChangePasswordSerializer,
     LogoutSerializer,
     MeSerializer,
+    MaintolioTokenObtainPairSerializer,
     OrganizationRegisterSerializer,
 )
 
 class CustomTokenObtainPairView(TokenObtainPairView):
+    serializer_class = MaintolioTokenObtainPairSerializer
+
     @extend_schema(
         tags=["Auth"],
         summary="Login",

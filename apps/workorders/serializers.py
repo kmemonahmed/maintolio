@@ -386,7 +386,9 @@ class WorkOrderChangeStatusSerializer(serializers.Serializer):
             WorkOrder.Status.CANCELLED,
         ],
         WorkOrder.Status.COMPLETED: [],
-        WorkOrder.Status.CANCELLED: [],
+        WorkOrder.Status.CANCELLED: [
+            WorkOrder.Status.OPEN,
+        ],
     }
 
     def validate_status(self, value):
@@ -407,6 +409,19 @@ class WorkOrderChangeStatusSerializer(serializers.Serializer):
 
         return value
 
+    def validate(self, attrs):
+        old_status = self.instance.status
+        new_status = attrs["status"]
+        message = attrs.get("message", "").strip()
+
+        if old_status == WorkOrder.Status.CANCELLED and new_status == WorkOrder.Status.OPEN:
+            if not message:
+                raise serializers.ValidationError(
+                    {"message": "Enter a reason before reopening this work order."}
+                )
+
+        return attrs
+
     def update(self, instance, validated_data):
         old_status = instance.status
         new_status = validated_data["status"]
@@ -414,12 +429,18 @@ class WorkOrderChangeStatusSerializer(serializers.Serializer):
         is_internal = validated_data.get("is_internal", False)
 
         instance.status = new_status
-        instance.save(update_fields=[
+        update_fields = [
             "status",
             "completed_at",
             "cancelled_at",
             "updated_at",
-        ])
+        ]
+
+        if old_status == WorkOrder.Status.CANCELLED and new_status == WorkOrder.Status.OPEN:
+            instance.assigned_to = None
+            update_fields.append("assigned_to")
+
+        instance.save(update_fields=update_fields)
 
         WorkOrderUpdate.objects.create(
             work_order=instance,

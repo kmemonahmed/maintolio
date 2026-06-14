@@ -1,3 +1,4 @@
+from django.db.models import Case, F, IntegerField, Value, When
 from drf_spectacular.utils import extend_schema
 from rest_framework import status, viewsets, mixins
 from rest_framework.exceptions import PermissionDenied
@@ -7,6 +8,7 @@ from rest_framework.decorators import action
 
 from apps.organizations.models import OrganizationMembership
 from apps.organizations.utils import get_current_membership
+from apps.notifications.services import notify_work_order_status_changed
 
 from .models import WorkOrder
 
@@ -216,8 +218,17 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
                 "Completed work orders cannot be cancelled from this endpoint."
             )
 
+        old_status = work_order.status
         work_order.status = WorkOrder.Status.CANCELLED
         work_order.save(update_fields=["status", "cancelled_at", "completed_at", "updated_at"])
+
+        notify_work_order_status_changed(
+            work_order,
+            old_status,
+            WorkOrder.Status.CANCELLED,
+            actor=request.user,
+            is_internal=False,
+        )
 
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -253,6 +264,14 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
 
     def require_status_change_permission(self, work_order):
         current_membership = self.get_current_membership()
+
+        if work_order.status == WorkOrder.Status.CANCELLED:
+            if current_membership.role in MANAGE_WORK_ORDER_ROLES:
+                return
+
+            raise PermissionDenied(
+                "Only workspace managers can reopen cancelled work orders."
+            )
 
         if current_membership.role in MANAGE_WORK_ORDER_ROLES:
             return
@@ -341,6 +360,14 @@ class WorkOrderViewSet(viewsets.ModelViewSet):
             status=status.HTTP_201_CREATED,
         )
     def require_attachment_upload_permission(self, work_order):
+        if work_order.status in [
+            WorkOrder.Status.COMPLETED,
+            WorkOrder.Status.CANCELLED,
+        ]:
+            raise PermissionDenied(
+                "Attachments cannot be uploaded to closed work orders."
+            )
+
         current_membership = self.get_current_membership()
 
         if current_membership.role in MANAGE_WORK_ORDER_ROLES:
@@ -514,7 +541,28 @@ class TechnicianWorkOrderViewSet(
                 "assigned_to__user",
             )
 
-        return queryset.order_by("-created_at")
+        if self.action == "list" and "status" not in self.request.query_params:
+            queryset = queryset.exclude(
+                status__in=[
+                    WorkOrder.Status.COMPLETED,
+                    WorkOrder.Status.CANCELLED,
+                ]
+            )
+
+        return queryset.annotate(
+            technician_priority=Case(
+                When(status=WorkOrder.Status.OVERDUE, then=Value(0)),
+                When(status=WorkOrder.Status.IN_PROGRESS, then=Value(1)),
+                When(status=WorkOrder.Status.ASSIGNED, then=Value(2)),
+                When(status=WorkOrder.Status.ON_HOLD, then=Value(3)),
+                default=Value(4),
+                output_field=IntegerField(),
+            )
+        ).order_by(
+            "technician_priority",
+            F("due_date").asc(nulls_last=True),
+            "-updated_at",
+        )
 
     def get_serializer_class(self):
         if self.action == "list":
