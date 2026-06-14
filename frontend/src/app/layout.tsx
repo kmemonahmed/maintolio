@@ -16,6 +16,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Maintolio",
   description: "Multi-tenant work order and asset management dashboard.",
+  icons: {
+    icon: "/icon.svg",
+  },
 };
 
 export default function RootLayout({

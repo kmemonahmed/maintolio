@@ -224,7 +224,7 @@ export function WorkOrderDetailScreen({ id, portal = "company" }: { id: string; 
                 <p className="whitespace-pre-wrap text-sm leading-6">{workOrder.description}</p>
               )}
               <div className="grid gap-3 text-sm md:grid-cols-3">
-                <Info label="Asset" value={workOrder.asset?.name ?? "None"} />
+                <Info label="Asset" value={workOrder.asset?.name ?? "No asset linked"} />
                 <Info label="Assigned to" value={workOrder.assigned_to?.user.full_name ?? "Unassigned"} />
                 <Info label="Due" value={formatDate(workOrder.due_date)} />
                 <Info label="Created" value={formatDate(workOrder.created_at)} />

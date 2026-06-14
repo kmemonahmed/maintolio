@@ -1,7 +1,8 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Edit, Plus, Search, Trash2 } from "lucide-react";
+import * as Dialog from "@radix-ui/react-dialog";
+import { Edit, Eye, Plus, Search, Trash2, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -27,6 +28,12 @@ export type ColumnConfig<T> = {
   value: (row: T) => React.ReactNode;
 };
 
+export type DetailConfig<T> = {
+  label: string;
+  value: (row: T) => React.ReactNode;
+  wide?: boolean;
+};
+
 type ResourceListProps<T extends { id: string }> = {
   title: string;
   description: string;
@@ -36,6 +43,7 @@ type ResourceListProps<T extends { id: string }> = {
   update?: (id: string, body: Record<string, unknown>) => Promise<unknown>;
   remove?: (id: string) => Promise<unknown>;
   columns: ColumnConfig<T>[];
+  details?: DetailConfig<T>[];
   fields?: FieldConfig[];
   searchPlaceholder?: string;
   filters?: FieldConfig[];
@@ -54,6 +62,7 @@ export function ResourceList<T extends { id: string }>({
   update,
   remove,
   columns,
+  details = [],
   fields = [],
   searchPlaceholder = "Search",
   filters = [],
@@ -67,12 +76,14 @@ export function ResourceList<T extends { id: string }>({
   const [search, setSearch] = useState("");
   const [filterValues, setFilterValues] = useState<Record<string, string>>({});
   const [editing, setEditing] = useState<T | null>(null);
+  const [viewing, setViewing] = useState<T | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<T | null>(null);
 
   const params = useMemo(() => compactObject({ page, search, ...filterValues }), [page, search, filterValues]);
   const query = useQuery({ queryKey: [queryKey, params], queryFn: () => list(params) });
-  const hasRowActions = Boolean(update || remove);
+  const hasRowActions = Boolean(details.length || update || remove);
+  const entityLabel = getEntityLabel(title, actionLabel);
 
   const saveMutation = useMutation({
     mutationFn: (body: Record<string, unknown>) => {
@@ -115,7 +126,7 @@ export function ResourceList<T extends { id: string }>({
             }}
           >
             <Plus className="h-4 w-4" />
-            {actionLabel ?? `Add ${title.replace(/s$/, "")}`}
+            {actionLabel ?? `Add ${entityLabel}`}
           </Button>
         ) : null}
       </div>
@@ -171,7 +182,7 @@ export function ResourceList<T extends { id: string }>({
                         {column.header}
                       </th>
                     ))}
-                    {hasRowActions ? <th className="w-24 px-4 py-3 text-right font-semibold">Actions</th> : null}
+                    {hasRowActions ? <th className="w-32 px-4 py-3 text-right font-semibold">Actions</th> : null}
                   </tr>
                 </thead>
                 <tbody>
@@ -191,6 +202,11 @@ export function ResourceList<T extends { id: string }>({
                       {hasRowActions ? (
                         <td className="px-4 py-3">
                           <div className="flex justify-end gap-1">
+                            {details.length ? (
+                              <Button variant="ghost" size="icon" onClick={() => setViewing(row)} aria-label="View details">
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                            ) : null}
                             {update ? (
                               <Button
                                 variant="ghost"
@@ -232,8 +248,10 @@ export function ResourceList<T extends { id: string }>({
       </Card>
 
       {formOpen ? (
-        <FormPanel
-          title={editing ? `Update ${title}` : actionLabel ?? `Add ${title.replace(/s$/, "")}`}
+        <FormDialog
+          key={editing?.id ?? "new"}
+          open={formOpen}
+          title={editing ? `Edit ${entityLabel}` : actionLabel ?? `Add ${entityLabel}`}
           fields={fields.filter((field) => !(editing && field.createOnly))}
           initialValues={getInitialValues?.(editing ?? undefined) ?? {}}
           onCancel={() => {
@@ -242,6 +260,17 @@ export function ResourceList<T extends { id: string }>({
           }}
           onSubmit={(values) => saveMutation.mutate(values)}
           isSaving={saveMutation.isPending}
+          mode={editing ? "edit" : "create"}
+        />
+      ) : null}
+
+      {viewing ? (
+        <DetailsDialog
+          open={Boolean(viewing)}
+          title={`${entityLabel.charAt(0).toUpperCase()}${entityLabel.slice(1)} details`}
+          row={viewing}
+          details={details}
+          onClose={() => setViewing(null)}
         />
       ) : null}
 
@@ -257,20 +286,75 @@ export function ResourceList<T extends { id: string }>({
   );
 }
 
-function FormPanel({
+function DetailsDialog<T>({
+  open,
+  title,
+  row,
+  details,
+  onClose,
+}: {
+  open: boolean;
+  title: string;
+  row: T;
+  details: DetailConfig<T>[];
+  onClose: () => void;
+}) {
+  return (
+    <Dialog.Root open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-40 bg-slate-950/45 backdrop-blur-[2px]" />
+        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 flex max-h-[88vh] w-[94vw] max-w-2xl -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-[#d7e3e7] bg-surface shadow-2xl shadow-slate-950/20">
+          <div className="flex items-start justify-between gap-4 border-b border-border bg-[#f8fbfc] px-5 py-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">Record profile</p>
+              <Dialog.Title className="mt-1 text-lg font-semibold tracking-tight">{title}</Dialog.Title>
+            </div>
+            <Dialog.Close asChild>
+              <Button type="button" variant="ghost" size="icon" aria-label="Close details">
+                <X className="h-4 w-4" />
+              </Button>
+            </Dialog.Close>
+          </div>
+          <div className="grid min-h-0 gap-4 overflow-y-auto px-5 py-5 md:grid-cols-2">
+            {details.map((detail) => (
+              <div
+                key={detail.label}
+                className={detail.wide ? "rounded-lg border border-border bg-[#fbfcfd] p-3 md:col-span-2" : "rounded-lg border border-border bg-[#fbfcfd] p-3"}
+              >
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">{detail.label}</p>
+                <div className="mt-2 whitespace-pre-wrap break-words text-sm leading-6">{detail.value(row) || <span className="text-muted-foreground">Not provided</span>}</div>
+              </div>
+            ))}
+          </div>
+          <div className="flex justify-end border-t border-border bg-[#fbfcfd] px-5 py-4">
+            <Button type="button" variant="secondary" onClick={onClose}>
+              Close
+            </Button>
+          </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
+}
+
+function FormDialog({
+  open,
   title,
   fields,
   initialValues,
   onCancel,
   onSubmit,
   isSaving,
+  mode,
 }: {
+  open: boolean;
   title: string;
   fields: FieldConfig[];
   initialValues: Record<string, unknown>;
   onCancel: () => void;
   onSubmit: (values: Record<string, unknown>) => void;
   isSaving: boolean;
+  mode: "create" | "edit";
 }) {
   const [values, setValues] = useState<Record<string, unknown>>(initialValues);
 
@@ -279,64 +363,112 @@ function FormPanel({
   }
 
   return (
-    <Card className="premium-panel border-[#d7e3e7]">
-      <CardHeader>
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">Details</p>
-          <h3 className="mt-1 text-base font-semibold">{title}</h3>
-        </div>
-      </CardHeader>
-      <CardContent>
+    <Dialog.Root
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen && !isSaving) onCancel();
+      }}
+    >
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-40 bg-slate-950/45 backdrop-blur-[2px]" />
+        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 flex max-h-[90vh] w-[94vw] max-w-2xl -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-[#d7e3e7] bg-surface shadow-2xl shadow-slate-950/20">
+          <div className="flex items-start justify-between gap-4 border-b border-border bg-[#f8fbfc] px-5 py-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">Details</p>
+              <Dialog.Title className="mt-1 text-lg font-semibold tracking-tight">{title}</Dialog.Title>
+              <Dialog.Description className="mt-1 text-sm text-muted-foreground">
+                Review the record details before saving changes.
+              </Dialog.Description>
+            </div>
+            <Dialog.Close asChild>
+              <Button type="button" variant="ghost" size="icon" disabled={isSaving} aria-label="Close form">
+                <X className="h-4 w-4" />
+              </Button>
+            </Dialog.Close>
+          </div>
         <form
-          className="grid gap-4 md:grid-cols-2"
+          className="flex min-h-0 flex-1 flex-col"
           onSubmit={(event) => {
             event.preventDefault();
-            onSubmit(compactObject(values));
+            onSubmit(buildFormPayload(fields, values, mode));
           }}
         >
-          {fields.map((field) => (
-            <div key={field.name} className={field.type === "textarea" ? "space-y-1.5 md:col-span-2" : "space-y-1.5"}>
-              <Label>{field.label}</Label>
-              {field.type === "textarea" ? (
-                <Textarea value={String(values[field.name] ?? "")} required={field.required} onChange={(event) => setValue(field.name, event.target.value)} />
-              ) : field.type === "select" ? (
-                <Select value={String(values[field.name] ?? "")} required={field.required} onChange={(event) => setValue(field.name, event.target.value)}>
-                  <option value="">Choose {field.label.toLowerCase()}</option>
-                  {field.options?.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </Select>
-              ) : field.type === "checkbox" ? (
-                <label className="flex h-10 items-center gap-2 rounded-md border border-border bg-surface px-3 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={Boolean(values[field.name])}
-                    onChange={(event) => setValue(field.name, event.target.checked)}
+          <div className="grid min-h-0 gap-4 overflow-y-auto px-5 py-5 md:grid-cols-2">
+            {fields.map((field) => (
+              <div key={field.name} className={field.type === "textarea" ? "space-y-1.5 md:col-span-2" : "space-y-1.5"}>
+                {field.type !== "checkbox" ? <Label>{field.label}</Label> : null}
+                {field.type === "textarea" ? (
+                  <Textarea value={String(values[field.name] ?? "")} required={field.required} onChange={(event) => setValue(field.name, event.target.value)} />
+                ) : field.type === "select" ? (
+                  <Select value={String(values[field.name] ?? "")} required={field.required} onChange={(event) => setValue(field.name, event.target.value)}>
+                    <option value="">Choose {field.label.toLowerCase()}</option>
+                    {field.options?.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </Select>
+                ) : field.type === "checkbox" ? (
+                  <label className="flex h-10 items-center gap-2 rounded-md border border-border bg-surface px-3 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(values[field.name])}
+                      onChange={(event) => setValue(field.name, event.target.checked)}
+                    />
+                    {field.label}
+                  </label>
+                ) : (
+                  <Input
+                    type={field.type ?? "text"}
+                    value={String(values[field.name] ?? "")}
+                    required={field.required}
+                    onChange={(event) => setValue(field.name, event.target.value)}
                   />
-                  Available
-                </label>
-              ) : (
-                <Input
-                  type={field.type ?? "text"}
-                  value={String(values[field.name] ?? "")}
-                  required={field.required}
-                  onChange={(event) => setValue(field.name, event.target.value)}
-                />
-              )}
-            </div>
-          ))}
-          <div className="flex justify-end gap-2 md:col-span-2">
-            <Button type="button" variant="secondary" onClick={onCancel}>
+                )}
+              </div>
+            ))}
+          </div>
+          <div className="flex justify-end gap-2 border-t border-border bg-[#fbfcfd] px-5 py-4">
+            <Button type="button" variant="secondary" onClick={onCancel} disabled={isSaving}>
               Cancel
             </Button>
             <Button disabled={isSaving}>{isSaving ? "Saving" : "Save changes"}</Button>
           </div>
         </form>
-      </CardContent>
-    </Card>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
+}
+
+function buildFormPayload(fields: FieldConfig[], values: Record<string, unknown>, mode: "create" | "edit") {
+  const payload = Object.fromEntries(
+    fields.map((field) => {
+      const value = values[field.name];
+
+      if ((field.type === "date" || field.type === "datetime-local") && value === "") {
+        return [field.name, mode === "edit" ? null : undefined];
+      }
+
+      if (field.type === "checkbox") {
+        return [field.name, Boolean(value)];
+      }
+
+      return [field.name, value];
+    }),
+  );
+
+  return mode === "create" ? compactObject(payload) : payload;
+}
+
+function getEntityLabel(title: string, actionLabel?: string) {
+  if (actionLabel) {
+    const normalized = actionLabel.replace(/^(Add|Create|Invite)\s+/i, "");
+    if (normalized !== actionLabel) return normalized;
+  }
+
+  if (title === "Client Contacts") return "contact";
+  return title.replace(/s$/, "").toLowerCase();
 }
 
 export function dateColumn(value?: string | null) {

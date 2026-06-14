@@ -48,6 +48,7 @@ export type Me = {
   email: string;
   full_name: string;
   phone: string;
+  avatar: string | null;
   is_platform_admin: boolean;
   organization_memberships: Membership[];
   client_contact_profile: ClientContactProfile | null;
@@ -195,4 +196,3 @@ export type DailyWorkOrderSummary = {
   date_to: string | null;
   results: Array<{ date: string; total_work_orders: number; completed_work_orders: number; urgent_priority_work_orders: number }>;
 };
-

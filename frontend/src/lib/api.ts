@@ -134,6 +134,7 @@ export const api = {
       { method: "POST", body },
     ),
   me: () => apiRequest<Me>("/api/auth/me/"),
+  updateProfile: (body: FormData) => apiRequest<Me>("/api/auth/profile/", { method: "PATCH", body, isFormData: true }),
   logout: (refresh: string) => apiRequest<{ message: string }>("/api/auth/logout/", { method: "POST", body: { refresh } }),
   changePassword: (body: { old_password: string; new_password: string; new_password_confirm: string }) =>
     apiRequest<{ message: string }>("/api/auth/change-password/", { method: "POST", body }),

@@ -1,5 +1,6 @@
 from drf_spectacular.utils import extend_schema
 from rest_framework import generics, status
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -11,6 +12,7 @@ from .serializers import (
     MeSerializer,
     MaintolioTokenObtainPairSerializer,
     OrganizationRegisterSerializer,
+    ProfileUpdateSerializer,
 )
 
 class CustomTokenObtainPairView(TokenObtainPairView):
@@ -94,6 +96,30 @@ class MeView(generics.GenericAPIView):
     def get(self, request):
         serializer = self.get_serializer(request.user)
         return Response(serializer.data)
+
+
+class ProfileUpdateView(generics.GenericAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = ProfileUpdateSerializer
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    @extend_schema(
+        tags=["Auth"],
+        summary="Update current user profile",
+        description="Updates the authenticated user's display name and profile image.",
+        request=ProfileUpdateSerializer,
+        responses=MeSerializer,
+    )
+    def patch(self, request):
+        serializer = self.get_serializer(
+            request.user,
+            data=request.data,
+            partial=True,
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        return Response(MeSerializer(request.user, context={"request": request}).data)
 
 
 # Change Password

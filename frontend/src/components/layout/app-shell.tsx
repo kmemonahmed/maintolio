@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import {
   Bell,
   BriefcaseBusiness,
@@ -10,7 +11,7 @@ import {
   Home,
   LogOut,
   Menu,
-  Settings,
+  UserCircle,
   Users,
   Wrench,
   X,
@@ -21,7 +22,7 @@ import { useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
-import { cn } from "@/lib/utils";
+import { cn, mediaUrl } from "@/lib/utils";
 
 const companyNav = [
   { href: "/app/dashboard", label: "Dashboard", icon: Home },
@@ -30,17 +31,17 @@ const companyNav = [
   { href: "/app/client-contacts", label: "Contacts", icon: Users },
   { href: "/app/assets", label: "Assets", icon: Wrench },
   { href: "/app/team", label: "Team", icon: BriefcaseBusiness },
-  { href: "/app/settings", label: "Settings", icon: Settings },
+  { href: "/app/profile", label: "Profile", icon: UserCircle },
 ];
 
 const technicianNav = [
   { href: "/tech/work-orders", label: "Assigned Work", icon: HardHat },
-  { href: "/tech/settings", label: "Settings", icon: Settings },
+  { href: "/tech/profile", label: "Profile", icon: UserCircle },
 ];
 
 const clientNav = [
   { href: "/client/requests", label: "Requests", icon: ClipboardList },
-  { href: "/client/settings", label: "Settings", icon: Settings },
+  { href: "/client/profile", label: "Profile", icon: UserCircle },
 ];
 
 function navFor(mode: "company" | "technician" | "client") {
@@ -64,19 +65,16 @@ export function AppShell({ children, mode }: { children: React.ReactNode; mode: 
   const unreadLabel = unreadCount > 99 ? "99+" : String(unreadCount);
   const notificationsHref =
     mode === "client" ? "/client/notifications" : mode === "technician" ? "/tech/notifications" : "/app/notifications";
+  const avatar = mediaUrl(auth.user?.avatar);
+  const initials = getInitials(auth.user?.full_name || auth.user?.email);
 
   const sidebar = (
     <aside className="flex h-full w-[17rem] flex-col border-r border-[#20363e] bg-[#102027] text-white">
-      <div className="flex h-16 items-center justify-between border-b border-white/10 px-5">
+      <div className="flex h-24 items-center justify-between border-b border-white/10 px-4">
         <Link href={mode === "company" ? "/app/dashboard" : mode === "technician" ? "/tech/work-orders" : "/client/requests"}>
-          <span className="flex items-center gap-3">
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#23a3b8] shadow-lg shadow-cyan-950/30">
-              <Building2 className="h-4 w-4" />
-            </span>
-            <span>
-              <span className="block text-lg font-semibold tracking-tight">Maintolio</span>
-              <span className="block text-[10px] font-semibold uppercase tracking-[0.18em] text-[#9bcbd4]">Operations</span>
-            </span>
+          <span className="flex h-20 w-[14.5rem] items-center overflow-hidden rounded-lg bg-white shadow-lg shadow-cyan-950/20 ring-1 ring-white/10">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/maintolio-logo.svg" alt="Maintolio" className="h-[4.7rem] w-full object-cover object-center" />
           </span>
         </Link>
         <button className="md:hidden" onClick={() => setMobileOpen(false)} aria-label="Close navigation">
@@ -109,13 +107,7 @@ export function AppShell({ children, mode }: { children: React.ReactNode; mode: 
           );
         })}
       </nav>
-
-      <div className="border-t border-white/10 p-3">
-        <Button className="w-full justify-start text-[#b8d0d6] hover:bg-white/8 hover:text-white" variant="ghost" onClick={() => void auth.logout()}>
-          <LogOut className="h-4 w-4" />
-          Sign out
-        </Button>
-      </div>
+      <div className="border-t border-white/10 p-3 text-xs font-semibold uppercase tracking-[0.16em] text-[#6f929a]">Maintolio</div>
     </aside>
   );
 
@@ -133,27 +125,74 @@ export function AppShell({ children, mode }: { children: React.ReactNode; mode: 
       </div>
 
       <div className="md:pl-[17rem]">
-        <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-border bg-white/88 px-4 backdrop-blur-xl md:px-6">
-          <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setMobileOpen(true)}>
+        <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-border bg-white/88 px-4 backdrop-blur-xl md:px-6">
+          <Button variant="ghost" size="icon" className="shrink-0 md:hidden" onClick={() => setMobileOpen(true)}>
             <Menu className="h-5 w-5" />
           </Button>
-          <div>
-            <p className="text-xs font-medium uppercase text-muted-foreground">
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-xs font-medium uppercase text-muted-foreground">
               {mode === "company" ? auth.selectedMembership?.organization.name : mode === "technician" ? "Technician Portal" : "Client Portal"}
             </p>
-            <h1 className="text-base font-semibold">Service operations workspace</h1>
+            <h1 className="truncate text-base font-semibold">Service operations workspace</h1>
           </div>
-          <Link href={notificationsHref} className="relative rounded-md border border-border bg-surface p-2 shadow-sm hover:bg-muted" aria-label="Notifications">
-            <Bell className="h-5 w-5" />
-            {unreadCount > 0 ? (
-              <span className="absolute -right-2 -top-2 min-w-5 rounded-full border-2 border-white bg-danger px-1 text-center text-[11px] font-bold leading-4 text-white">
-                {unreadLabel}
-              </span>
-            ) : null}
-          </Link>
+          <div className="flex shrink-0 items-center gap-3">
+            <Link href={notificationsHref} className="relative rounded-md border border-border bg-surface p-2 shadow-sm hover:bg-muted" aria-label="Notifications">
+              <Bell className="h-5 w-5" />
+              {unreadCount > 0 ? (
+                <span className="absolute -right-2 -top-2 min-w-5 rounded-full border-2 border-white bg-danger px-1 text-center text-[11px] font-bold leading-4 text-white">
+                  {unreadLabel}
+                </span>
+              ) : null}
+            </Link>
+            <DropdownMenu.Root modal={false}>
+              <DropdownMenu.Trigger asChild>
+                <button
+                  className="flex h-10 w-10 cursor-pointer items-center justify-center overflow-hidden rounded-full border border-[#9fc8d1] bg-[#e4f3f5] text-sm font-semibold text-primary shadow-sm outline outline-2 outline-offset-0 outline-primary ring-2 ring-[#d4eef3] transition hover:border-primary hover:bg-muted"
+                  aria-label="Open profile menu"
+                >
+                  {avatar ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={avatar} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    initials
+                  )}
+                </button>
+              </DropdownMenu.Trigger>
+              <DropdownMenu.Portal>
+                <DropdownMenu.Content
+                  align="end"
+                  sideOffset={8}
+                  className="z-50 w-48 rounded-lg border border-border bg-surface p-1.5 shadow-xl shadow-slate-950/15"
+                >
+                  <div className="rounded-md bg-[#f8fbfc] px-2 py-1.5">
+                    <p className="truncate text-sm font-semibold">{auth.user?.full_name || "Profile"}</p>
+                    <p className="mt-1 truncate text-xs text-muted-foreground">{auth.user?.email}</p>
+                  </div>
+                  <DropdownMenu.Item asChild>
+                    <button
+                      type="button"
+                      className="mt-1.5 flex h-8 w-full items-center justify-start gap-2 rounded-md border border-rose-200 bg-rose-50 px-2.5 text-left text-xs font-semibold text-danger shadow-sm hover:bg-rose-100"
+                      onClick={() => void auth.logout()}
+                    >
+                      <LogOut className="h-4 w-4" />
+                      Sign out
+                    </button>
+                  </DropdownMenu.Item>
+                </DropdownMenu.Content>
+              </DropdownMenu.Portal>
+            </DropdownMenu.Root>
+          </div>
         </header>
         <main className="mx-auto w-full max-w-7xl px-4 py-7 md:px-7">{children}</main>
       </div>
     </div>
   );
+}
+
+function getInitials(value?: string | null) {
+  if (!value) return "U";
+  const parts = value.trim().split(/\s+/).filter(Boolean);
+  const first = parts[0]?.[0] ?? "U";
+  const second = parts.length > 1 ? parts[parts.length - 1]?.[0] : "";
+  return `${first}${second}`.toUpperCase();
 }

@@ -57,6 +57,26 @@ a {
   outline-offset: 2px;
 }
 
+button:not(:disabled),
+a[href],
+select:not(:disabled),
+input[type="checkbox"]:not(:disabled),
+input[type="radio"]:not(:disabled),
+input[type="file"]:not(:disabled),
+label:has(input[type="file"]:not(:disabled)),
+[role="button"],
+[role="menuitem"],
+[data-radix-collection-item] {
+  cursor: pointer;
+}
+
+button:disabled,
+select:disabled,
+input:disabled,
+textarea:disabled {
+  cursor: not-allowed;
+}
+
 table {
   border-collapse: separate;
   border-spacing: 0;

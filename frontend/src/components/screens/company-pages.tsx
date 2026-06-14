@@ -174,10 +174,21 @@ export function ClientsPage() {
       getInitialValues={(row) => ({ is_active: true, ...row })}
       columns={[
         { header: "Name", value: (row) => row.name },
-        { header: "Industry", value: (row) => row.industry || "None" },
-        { header: "Email", value: (row) => row.email || "None" },
+        { header: "Industry", value: (row) => row.industry || <span className="text-muted-foreground">Not provided</span> },
+        { header: "Email", value: (row) => row.email || <span className="text-muted-foreground">Not provided</span> },
         { header: "Status", value: (row) => <Badge value={row.is_active} /> },
         { header: "Created", value: (row) => dateColumn(row.created_at) },
+      ]}
+      details={[
+        { label: "Client name", value: (row) => row.name },
+        { label: "Status", value: (row) => <Badge value={row.is_active} /> },
+        { label: "Industry", value: (row) => row.industry },
+        { label: "Email", value: (row) => row.email },
+        { label: "Phone", value: (row) => row.phone },
+        { label: "Created", value: (row) => formatDate(row.created_at) },
+        { label: "Address", value: (row) => row.address, wide: true },
+        { label: "Notes", value: (row) => row.notes, wide: true },
+        { label: "Last updated", value: (row) => formatDate(row.updated_at) },
       ]}
     />
   );
@@ -227,6 +238,19 @@ export function ContactsPage() {
         { header: "Email", value: (row) => row.email },
         { header: "Portal", value: (row) => <Badge value={row.can_login ? "Enabled" : "Disabled"} /> },
         { header: "Status", value: (row) => <Badge value={row.is_active} /> },
+      ]}
+      details={[
+        { label: "Contact name", value: (row) => row.full_name },
+        { label: "Client", value: (row) => row.client.name },
+        { label: "Position", value: (row) => row.position },
+        { label: "Email", value: (row) => row.email },
+        { label: "Phone", value: (row) => row.phone },
+        { label: "Primary contact", value: (row) => <Badge value={row.is_primary ? "Yes" : "No"} /> },
+        { label: "Portal access", value: (row) => <Badge value={row.can_login ? "Enabled" : "Disabled"} /> },
+        { label: "Status", value: (row) => <Badge value={row.is_active} /> },
+        { label: "Linked user", value: (row) => row.user?.email },
+        { label: "Created", value: (row) => formatDate(row.created_at) },
+        { label: "Last updated", value: (row) => formatDate(row.updated_at) },
       ]}
     />
   );
@@ -278,6 +302,18 @@ export function AssetsPage() {
         { header: "Type", value: (row) => row.asset_type },
         { header: "Status", value: (row) => <Badge value={row.status} /> },
       ]}
+      details={[
+        { label: "Asset name", value: (row) => row.name },
+        { label: "Client", value: (row) => row.client.name },
+        { label: "Asset type", value: (row) => row.asset_type },
+        { label: "Serial number", value: (row) => row.serial_number },
+        { label: "Status", value: (row) => <Badge value={row.status} /> },
+        { label: "Location", value: (row) => row.location },
+        { label: "Installed", value: (row) => formatDate(row.installed_at) },
+        { label: "Last service", value: (row) => formatDate(row.last_service_date) },
+        { label: "Created", value: (row) => formatDate(row.created_at) },
+        { label: "Last updated", value: (row) => formatDate(row.updated_at) },
+      ]}
       destructiveLabel="Retire"
     />
   );
@@ -326,6 +362,17 @@ export function TeamPage() {
         { header: "Status", value: (row) => <Badge value={row.is_active} /> },
         { header: "Joined", value: (row) => dateColumn(row.joined_at) },
       ]}
+      details={[
+        { label: "Team member", value: (row) => row.user.full_name },
+        { label: "Email", value: (row) => row.user.email },
+        { label: "Phone", value: (row) => row.user.phone },
+        { label: "Role", value: (row) => <Badge value={row.role} /> },
+        { label: "Membership status", value: (row) => <Badge value={row.is_active} /> },
+        { label: "User account", value: (row) => <Badge value={row.user.is_active ? "Active" : "Inactive"} /> },
+        { label: "Joined", value: (row) => formatDate(row.joined_at) },
+        { label: "Created", value: (row) => formatDate(row.created_at) },
+        { label: "Last updated", value: (row) => formatDate(row.updated_at) },
+      ]}
       destructiveLabel="Deactivate"
     />
   );
@@ -355,7 +402,7 @@ export function WorkOrdersPage({ portal = "company" }: { portal?: "company" | "t
   const columns = [
     { header: "Title", value: (row: WorkOrderListItem) => row.title },
     { header: "Client", value: (row: WorkOrderListItem) => row.client?.name ?? "Client portal" },
-    { header: "Asset", value: (row: WorkOrderListItem) => row.asset?.name ?? "None" },
+    { header: "Asset", value: (row: WorkOrderListItem) => row.asset?.name ?? <span className="text-muted-foreground">No asset linked</span> },
     ...(portal === "company"
       ? [{ header: "Assigned to", value: (row: WorkOrderListItem) => row.assigned_to?.user.full_name ?? "Unassigned" }]
       : []),

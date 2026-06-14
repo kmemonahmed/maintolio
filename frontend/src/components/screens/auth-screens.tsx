@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowRight, Building2, CheckCircle2, LockKeyhole, ShieldCheck } from "lucide-react";
+import { ArrowRight, CheckCircle2, LockKeyhole, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useSyncExternalStore } from "react";
@@ -182,13 +182,10 @@ function AuthFrame({ title, subtitle, children }: { title: string; subtitle: str
     <main className="grid min-h-screen bg-[#f2f6f7] lg:grid-cols-[0.95fr_1.05fr]">
       <section className="relative hidden overflow-hidden bg-[#102027] px-10 py-12 text-white lg:flex lg:flex-col lg:justify-between">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(72,190,205,0.28),transparent_28%),radial-gradient(circle_at_80%_10%,rgba(247,181,87,0.18),transparent_24%)]" />
-        <div className="relative flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-[#23a3b8] shadow-lg shadow-cyan-950/30">
-            <Building2 className="h-5 w-5" />
-          </div>
-          <div>
-            <span className="block text-xl font-semibold">Maintolio</span>
-            <span className="text-xs font-medium uppercase tracking-[0.18em] text-[#9bcbd4]">Service operations</span>
+        <div className="relative flex">
+          <div className="flex h-28 w-[34rem] max-w-full items-center overflow-hidden rounded-xl bg-white shadow-xl shadow-cyan-950/20 ring-1 ring-white/10">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/maintolio-logo.svg" alt="Maintolio" className="h-full w-full scale-110 object-contain object-center" />
           </div>
         </div>
         <div className="relative">

@@ -1,0 +1,17 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Maintolio">
+  <rect width="512" height="512" rx="112" fill="#FDFDFD"/>
+  <path d="M147 118h42a33 33 0 0 1 66 0h40a34 34 0 0 1 34 34v210a34 34 0 0 1-34 34H147a34 34 0 0 1-34-34V152a34 34 0 0 1 34-34Z" fill="#FFFFFF" stroke="#042A3C" stroke-width="30"/>
+  <path d="M165 103h114v71H165v-71Z" fill="#042A3C"/>
+  <circle cx="222" cy="103" r="16" fill="#FDFDFD"/>
+  <path d="m150 226 27 28 55-64" fill="none" stroke="#048B90" stroke-width="23" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M257 229h73" stroke="#048B90" stroke-width="19" stroke-linecap="round"/>
+  <path d="m150 307 27 28 55-64" fill="none" stroke="#048B90" stroke-width="23" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M257 310h50" stroke="#048B90" stroke-width="19" stroke-linecap="round"/>
+  <path d="M355 119 412 86v132l-57-32V119Z" fill="#048B90"/>
+  <path d="M313 80 365 50l52 31v105l-52-24-52 24V80Z" fill="#042A3C"/>
+  <path d="M344 103h26v33h-26v-33Zm45 26h25v33h-25v-33Zm-45 65h26v34h-26v-34Zm45 0h25v34h-25v-34Z" fill="#FDFDFD"/>
+  <path d="M329 407c-5-2-10-4-15-6l-30 30-48-48 30-30c-2-5-4-10-6-15h-43v-67h43c2-5 4-10 6-15l-30-30 48-48 30 30c5-2 10-4 15-6v-43h67v43c5 2 10 4 15 6l30-30 48 48-30 30c2 5 4 10 6 15h43v67h-43c-2 5-4 10-6 15l30 30-48 48-30-30c-5 2-10 4-15 6v43h-67v-43Z" fill="#048B90"/>
+  <circle cx="363" cy="305" r="91" fill="#FDFDFD"/>
+  <circle cx="363" cy="305" r="67" fill="#048B90"/>
+  <path d="m322 302 31 32 63-71" fill="none" stroke="#FDFDFD" stroke-width="25" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

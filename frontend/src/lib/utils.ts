@@ -13,6 +13,14 @@ export function formatDate(value?: string | null) {
   }).format(new Date(value));
 }
 
+export function mediaUrl(value?: string | null) {
+  if (!value) return null;
+  if (value.startsWith("http")) return value;
+
+  const base = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
+  return `${base}${value.startsWith("/") ? value : `/${value}`}`;
+}
+
 export function titleCase(value?: string | null) {
   if (!value) return "Unknown";
   return value
@@ -27,4 +35,3 @@ export function compactObject<T extends Record<string, unknown>>(value: T) {
     Object.entries(value).filter(([, item]) => item !== "" && item !== null && item !== undefined),
   ) as Partial<T>;
 }
-

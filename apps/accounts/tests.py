@@ -78,7 +78,27 @@ class AuthAPITests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["email"], user.email)
+        self.assertIn("avatar", response.data)
         self.assertEqual(len(response.data["organization_memberships"]), 1)
+
+    def test_profile_update_changes_current_user_name(self):
+        user, _ = create_member_user(
+            email="profile-update@example.com",
+            organization=create_organization("Profile Update Org"),
+            full_name="Old Name",
+        )
+        self.client.force_authenticate(user=user)
+
+        response = self.client.patch(
+            reverse("profile"),
+            {"full_name": "New Name"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        user.refresh_from_db()
+        self.assertEqual(user.full_name, "New Name")
+        self.assertEqual(response.data["full_name"], "New Name")
 
     def test_change_password_works(self):
         user, _ = create_member_user(
