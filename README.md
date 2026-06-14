@@ -189,3 +189,16 @@ Backend v1 is complete. Frontend applications are planned.
 - S3 file storage
 - Production deployment on AWS
 - Advanced analytics
+
+## Frontend
+
+A Next.js frontend lives in `frontend/`.
+
+```bash
+cd frontend
+cp .env.local.example .env.local
+npm install
+npm run dev
+```
+
+Open `http://127.0.0.1:3000` while the Django API is running on `http://127.0.0.1:8000`. The frontend proxies `/api/*` and `/media/*` to the backend during local development.

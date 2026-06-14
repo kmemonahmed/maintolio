@@ -1,11 +1,25 @@
 from django.contrib.auth.password_validation import validate_password
 from django.db import transaction
 from drf_spectacular.utils import extend_schema_field
+from rest_framework.exceptions import AuthenticationFailed
 from rest_framework import serializers
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 from apps.accounts.models import User
 from apps.organizations.models import Organization, OrganizationMembership
 from apps.clients.models import ClientContact
+
+
+class MaintolioTokenObtainPairSerializer(TokenObtainPairSerializer):
+    def validate(self, attrs):
+        data = super().validate(attrs)
+
+        if self.user.is_staff or self.user.is_superuser:
+            raise AuthenticationFailed(
+                "You are not authorized to access this portal."
+            )
+
+        return data
 
 
 
@@ -126,6 +140,7 @@ class MeSerializer(serializers.Serializer):
     email = serializers.EmailField()
     full_name = serializers.CharField()
     phone = serializers.CharField()
+    avatar = serializers.ImageField(allow_null=True)
     is_platform_admin = serializers.SerializerMethodField()
     organization_memberships = serializers.SerializerMethodField()
     client_contact_profile = serializers.SerializerMethodField()
@@ -185,3 +200,62 @@ class ChangePasswordSerializer(serializers.Serializer):
 # serlizer for logout
 class LogoutSerializer(serializers.Serializer):
     refresh = serializers.CharField()
+
+
+class ProfileUpdateSerializer(serializers.ModelSerializer):
+    remove_avatar = serializers.BooleanField(required=False, write_only=True)
+
+    class Meta:
+        model = User
+        fields = (
+            "full_name",
+            "avatar",
+            "remove_avatar",
+        )
+        extra_kwargs = {
+            "full_name": {"required": False},
+            "avatar": {"required": False, "allow_null": True},
+        }
+
+    def validate_full_name(self, value):
+        value = value.strip()
+
+        if not value:
+            raise serializers.ValidationError("Enter your name before saving.")
+
+        return value
+
+    @transaction.atomic
+    def update(self, instance, validated_data):
+        remove_avatar = validated_data.pop("remove_avatar", False)
+        avatar = validated_data.pop("avatar", None)
+        updated_fields = []
+
+        if "full_name" in validated_data:
+            instance.full_name = validated_data["full_name"]
+            updated_fields.append("full_name")
+
+        if remove_avatar:
+            if instance.avatar:
+                instance.avatar.delete(save=False)
+            instance.avatar = ""
+            updated_fields.append("avatar")
+        elif avatar:
+            if instance.avatar:
+                instance.avatar.delete(save=False)
+            instance.avatar = avatar
+            updated_fields.append("avatar")
+
+        if updated_fields:
+            instance.save(update_fields=updated_fields + ["updated_at"])
+
+        try:
+            contact_profile = instance.client_contact_profile
+        except ClientContact.DoesNotExist:
+            contact_profile = None
+
+        if contact_profile and "full_name" in validated_data:
+            contact_profile.full_name = instance.full_name
+            contact_profile.save(update_fields=["full_name", "updated_at"])
+
+        return instance
